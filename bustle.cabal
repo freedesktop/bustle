@@ -59,3 +59,8 @@ Executable bustle-dot
   Other-modules:  Bustle.Parser, Bustle.Types
   Build-Depends:  haskell98, base >= 4 && < 5, containers, parsec
   Ghc-options:    -Wall -fno-warn-unused-imports -fno-warn-unused-do-bind
+
+-- Heh, heh. This gets us an executable which isn't installed.
+Test-Suite bustle-draw-icon
+  Type:           exitcode-stdio-1.0
+  Main-is:        Bustle/DrawIcon.hs

@@ -43,6 +43,9 @@ module Bustle.Diagram
   , topLeftJustifyDiagram
   , drawDiagram
   , drawRegion
+
+  -- Only for the icon drawing code
+  , drawArcCurve
   )
 where
 
@@ -370,17 +373,23 @@ drawSignalArrow e left right y = do
     arrowHead True
     stroke
 
-drawArc :: Double -> Double -> Double -> Double
-        -> Double -> Double -> Double -> Double
-        -> String
-        -> Render ()
-drawArc cx cy dx dy x1 y1 x2 y2 cap = saved $ do
+drawArcCurve :: Double -> Double -> Double -> Double
+             -> Double -> Double -> Double -> Double
+             -> Render ()
+drawArcCurve cx cy dx dy x1 y1 x2 y2 = saved $ do
     setSourceRGB 0.4 0.7 0.4
     setDash [3, 3] 0
 
     moveTo x1 y1
     curveTo cx cy dx dy x2 y2
     stroke
+
+drawArc :: Double -> Double -> Double -> Double
+        -> Double -> Double -> Double -> Double
+        -> String
+        -> Render ()
+drawArc cx cy dx dy x1 y1 x2 y2 cap = saved $ do
+    drawArcCurve cx cy dx dy x1 y1 x2 y2
 
     setSourceRGB 0 0 0
     l <- mkLayout cap EllipsizeNone AlignLeft
