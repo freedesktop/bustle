@@ -19,14 +19,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 module Bustle.Loader
   ( readLog
   , LoadError(..)
-
-  -- * This function bothers me, but it's used by the live recorder for now...
-  , isRelevant
   )
 where
 
 import Control.Monad.Except
-import Control.Arrow (second)
 
 import qualified Bustle.Loader.Pcap as Pcap
 import Bustle.Types
@@ -43,25 +39,5 @@ readLog :: MonadIO io
 readLog f = do
     pcapResult <- io $ Pcap.readPcap f
     case pcapResult of
-        Right ms -> return $ second (filter (isRelevant . deEvent)) ms
+        Right ms -> return $ ms
         Left ioe -> throwError $ LoadError f (show ioe)
-
-isRelevant :: Event
-           -> Bool
-isRelevant (NOCEvent _) = True
-isRelevant (MessageEvent m) = case m of
-    Signal {}       -> not senderIsBus
-    MethodCall {}   -> none3
-    MethodReturn {} -> none3
-    Error {}        -> none3
-  where
-    -- FIXME: really? Maybe we should allow people to be interested in,
-    --        say, binding to signals?
-    senderIsBus = sender m == busDriver
-    destIsBus = destination m == busDriver
-    busDriver = O (OtherName dbusName)
-
-    none bs = not $ or bs
-    none3 = none [senderIsBus, destIsBus]
-
-

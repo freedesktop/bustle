@@ -82,5 +82,5 @@ runDot filepath = process filepath makeDigraph id
         | (s, d) <- nub . mapMaybe (methodCall . deEvent) $ log
         ]
 
-    methodCall (MessageEvent MethodCall {sender = s, destination = d}) = Just (s, d)
+    methodCall (MethodCall {sender = s, destination = d}) = Just (s, d)
     methodCall _ = Nothing

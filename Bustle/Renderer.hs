@@ -52,8 +52,10 @@ import Control.Monad.State
 import Control.Monad.Writer
 
 import Data.List (sort, sortBy)
-import Data.Maybe (fromJust, fromMaybe, catMaybes)
+import Data.Maybe (fromJust, fromMaybe, catMaybes, listToMaybe)
 import Data.Ord (comparing)
+
+import qualified DBus
 
 data Bus = SessionBus
          | SystemBus
@@ -261,7 +263,7 @@ initialBusState :: Set UniqueName
                 -> Double
                 -> BusState
 initialBusState ignore x =
-    BusState { apps = Map.empty
+    BusState { apps = Map.empty -- TODO: org.fd.DBus -> self?
              , firstColumn = x
              , nextColumn = x
              , columnsInUse = Set.empty
@@ -341,18 +343,6 @@ getApps bus = apps <$> getBusState bus
 
 getsApps :: (Applications -> a) -> Bus -> Renderer a
 getsApps f = getsBusState (f . apps)
-
-lookupUniqueName :: Bus
-                 -> UniqueName
-                 -> Renderer ApplicationInfo
-lookupUniqueName bus u = do
-    thing <- getsApps (Map.lookup u) bus
-    case thing of
-        Just nameInfo -> return nameInfo
-        -- This happens with pcap logs where we don't (currently) have
-        -- explicit change notification for unique names in the stream of
-        -- DetailedEvents.
-        Nothing       -> addUnique bus u
 
 lookupOtherName :: Bus
                 -> OtherName
@@ -438,30 +428,21 @@ appCoordinate bus n = do
 modifyApps :: Bus -> (Applications -> Applications) -> Renderer ()
 modifyApps bus f = modifyBusState bus $ \bs -> bs { apps = f (apps bs) }
 
--- Updates the current set of applications in response to a well-known name's
--- owner changing.
-updateApps :: Bus -- ^ bus on which a name's owner has changed
-           -> OtherName -- name whose owner has changed.
-           -> Change -- details of the change
-           -> Renderer ()
-updateApps bus n c = case c of
-    Claimed new -> addOther bus n new
-    Stolen old new -> remOther bus n old >> addOther bus n new
-    Released old -> remOther bus n old
-
--- Adds a new unique name
-addUnique :: Bus -> UniqueName -> Renderer ApplicationInfo
-addUnique bus n = do
-    let ai = ApplicationInfo NoColumn Set.empty Set.empty
+lookupUniqueName :: Bus
+                 -> UniqueName
+                 -> Renderer ApplicationInfo
+lookupUniqueName bus n = do
     existing <- getsApps (Map.lookup n) bus
     case existing of
-        Nothing -> return ()
-        Just _  -> warn $ concat [ "Unique name '"
-                                 , unUniqueName n
-                                 , "' apparently connected to the bus twice"
-                                 ]
-    modifyApps bus $ Map.insert n ai
-    return ai
+        Nothing -> do
+            let ai = ApplicationInfo NoColumn Set.empty Set.empty
+            modifyApps bus $ Map.insert n ai
+            return ai
+        Just ai -> return ai
+
+-- Ensures a unique name is in the map without returning it
+addUnique :: Bus -> UniqueName -> Renderer ()
+addUnique bus n = void $ lookupUniqueName bus n
 
 -- Removes a unique name from the diagram. If we ever try to reuse columns
 -- we'll have to revisit the FormerColumn concept to include a range of time.
@@ -658,11 +639,11 @@ shouldShow bus m = do
     return $ Set.null (ignored `Set.intersection` Set.fromList names)
 
 processOne :: Bus
-           -> Detailed Event
+           -> Detailed Message
            -> Renderer ()
-processOne bus de = case deEvent de of
-    NOCEvent n     -> processNOC bus n
-    MessageEvent m -> processMessage bus (fmap (const m) de)
+processOne bus de = do
+    inferNameChanges bus de
+    processMessage bus de
 
 processMessage :: Bus
                -> Detailed Message
@@ -702,16 +683,66 @@ processMessage bus dm@(Detailed _ m _ _) = do
                     returnArc bus dm x y duration
                     addMessageRegion dm
 
+
+type NOCArgs = (DBus.BusName, Maybe DBus.BusName, Maybe DBus.BusName)
+
+
+matchNOC :: Detailed Message
+         -> Maybe NOCArgs
+matchNOC m = do
+    DBus.ReceivedSignal _ s <- return (deReceivedMessage m)
+    guard (DBus.signalSender s == Just dbusName)
+    guard (DBus.signalInterface s == dbusInterface)
+    guard (DBus.signalMember s == DBus.memberName_ "NameOwnerChanged")
+    case map DBus.fromVariant (DBus.signalBody s) of
+        [Just n, old, new] -> Just (n, old, new)
+        _                  -> Nothing
+
+
 processNOC :: Bus
-           -> NOC
+           -> NOCArgs
            -> Renderer ()
-processNOC bus noc =
-    case noc of
-        Connected { actor = u } -> void (addUnique bus u)
-        Disconnected { actor = u } -> remUnique bus u
-        NameChanged { changedName = n
-                    , change = c
-                    } -> updateApps bus n c
+processNOC bus args@(n, old_, new_) =
+    case tagBusName n of
+        U u -> case (old_, new_) of
+            (Just n_, Nothing) | n == n_ -> remUnique bus u
+            (Nothing, Just n_) | n == n_ -> addUnique bus u
+            _ -> warn $ "Malformed NameOwnerChanged: " ++ show args
+        O o -> do
+            forM_ old_ $ remOther bus o . UniqueName
+            forM_ new_ $ addOther bus o . UniqueName
+
+
+type GetNameOwnerReply = (OtherName, UniqueName)
+
+matchGetNameOwnerReply :: Detailed Message
+                       -> Maybe GetNameOwnerReply
+matchGetNameOwnerReply de = do
+    DBus.ReceivedMethodReturn _ reply_ <- return $ deReceivedMessage de
+    MethodReturn { inReplyTo = Just call } <- return $ deEvent de
+    DBus.ReceivedMethodCall _ call_ <- return $ deReceivedMessage call
+    guard (DBus.methodCallDestination call_  == Just dbusName)
+    guard (DBus.methodCallInterface call_ == Just dbusInterface)
+    guard (DBus.methodCallMember call_ == DBus.memberName_ "GetNameOwner")
+
+    let oneName :: [DBus.Variant] -> Maybe TaggedBusName
+        oneName args = do
+            arg <- listToMaybe args
+            tagBusName <$> DBus.fromVariant arg
+
+    -- Some people really do call GetNameOwner for unique names
+    (O owned) <- oneName $ DBus.methodCallBody call_
+    (U owner) <- oneName $ DBus.methodReturnBody reply_
+    return (owned, owner)
+
+
+inferNameChanges :: Bus
+           -> Detailed Message
+           -> Renderer ()
+inferNameChanges bus de = do
+    forM_ (matchNOC de) $ processNOC bus
+    forM_ (matchGetNameOwnerReply de) $ uncurry (addOther bus)
+    -- TODO: assume that reply sender owns name the message was sent to
 
 methodCall, methodReturn, errorReturn :: Bus
                                       -> Detailed Message

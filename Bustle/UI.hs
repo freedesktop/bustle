@@ -291,10 +291,7 @@ recorderRun wi target filename r = C.handle newFailed $ do
 
             case m of
                 Left e -> warn e
-                Right message
-                  | isRelevant (deEvent message) ->
-                        modifyIORef' pendingRef (message:)
-                  | otherwise -> return ()
+                Right message -> modifyIORef' pendingRef (message:)
 
     n <- newIORef (0 :: Int)
     processor <- processBatch pendingRef n wi

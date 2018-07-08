@@ -46,8 +46,7 @@ data TallyType = TallyMethod | TallySignal
 
 repr :: DetailedEvent
      -> Maybe (TallyType, Maybe InterfaceName, MemberName)
-repr (Detailed _ (NOCEvent _) _ _) = Nothing
-repr (Detailed _ (MessageEvent msg) _ _) =
+repr (Detailed _ msg _ _) =
     case msg of
         MethodCall { member = m } -> Just (TallyMethod, iface m, membername m)
         Signal     { member = m } -> Just (TallySignal, iface m, membername m)
@@ -89,9 +88,6 @@ methodTimes = sortBy (flip (comparing tiTotalTime)) . map summarize
             . foldr (\(i, method, time) ->
                         Map.alter (alt time) (i, method)) Map.empty
             . mapMaybe methodReturn
-            -- Get rid of NOC messages
-            . snd
-            . partitionDetaileds
     where alt newtime Nothing = Just (newtime, [newtime])
           alt newtime (Just (total, times)) =
               Just (newtime + total, newtime : times)
@@ -150,7 +146,7 @@ messageSizes messages =
     intMean :: [Int] -> Int
     intMean = ceiling . (mean :: [Double] -> Double) . map fromIntegral
 
-    sizeTable = foldr f Map.empty . snd . partitionDetaileds $ messages
+    sizeTable = foldr f Map.empty messages
 
     f :: Detailed Message
       -> Map (SizeType, Maybe InterfaceName, MemberName) [Int]

@@ -34,6 +34,7 @@ module Bustle.Types
   , TaggedBusName(..)
   , isUnique
   , isOther
+  , tagBusName
   , unUniqueName
   , unOtherName
   , unBusName
@@ -48,12 +49,8 @@ module Bustle.Types
 
   , Member(..)
   , Message(..)
-  , NOC(..)
-  , Event(..)
   , Detailed(..)
   , DetailedEvent
-  , Change(..)
-  , partitionDetaileds
   , mentionedNames
   , Log
   )
@@ -67,7 +64,6 @@ import DBus ( ObjectPath, formatObjectPath
             , ReceivedMessage
             )
 import Data.Maybe (maybeToList)
-import Data.Either (partitionEithers)
 
 type Serial = Word32
 
@@ -94,6 +90,11 @@ unOtherName (OtherName x) = formatBusName x
 unBusName :: TaggedBusName -> String
 unBusName (U (UniqueName x)) = formatBusName x
 unBusName (O (OtherName  x)) = formatBusName x
+
+tagBusName :: BusName -> TaggedBusName
+tagBusName n = case formatBusName n of
+    ':':_ -> U (UniqueName n)
+    _     -> O (OtherName n)
 
 -- These useful constants disappeared from dbus in the grand removing of the
 -- -core suffix.
@@ -122,10 +123,6 @@ data Member = Member { path :: ObjectPath
                      }
   deriving (Ord, Show, Eq)
 
-data Event = MessageEvent Message
-           | NOCEvent NOC
-  deriving (Show, Eq, Ord)
-
 data Message = MethodCall { serial :: Serial
                           , sender :: TaggedBusName
                           , destination :: TaggedBusName
@@ -145,15 +142,6 @@ data Message = MethodCall { serial :: Serial
                      }
   deriving (Show, Eq, Ord)
 
-data NOC = Connected { actor :: UniqueName
-                     }
-         | Disconnected { actor :: UniqueName
-                        }
-         | NameChanged { changedName :: OtherName
-                       , change :: Change
-                       }
-  deriving (Show, Eq, Ord)
-
 type MessageSize = Int
 
 data Detailed e =
@@ -164,25 +152,11 @@ data Detailed e =
              }
   deriving (Show, Eq, Functor)
 
-type DetailedEvent = Detailed Event
+type DetailedEvent = Detailed Message
 
 instance Ord e => Ord (Detailed e) where
     compare (Detailed µs x _ _) (Detailed µs' y _ _)
         = compare (µs, x) (µs', y)
-
-data Change = Claimed UniqueName
-            | Stolen UniqueName UniqueName
-            | Released UniqueName
-  deriving (Show, Eq, Ord)
-
-partitionDetaileds :: [DetailedEvent]
-                   -> ([Detailed NOC], [Detailed Message])
-partitionDetaileds = partitionEithers . map f
-  where
-    f (Detailed µs e size rm) =
-        case e of
-            NOCEvent n -> Left $ Detailed µs n size rm
-            MessageEvent m -> Right $ Detailed µs m size rm
 
 mentionedNames :: Message -> [TaggedBusName]
 mentionedNames m = sender m:dest
