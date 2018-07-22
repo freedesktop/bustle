@@ -39,9 +39,11 @@ flatpak-build:
     REPO: "repo"
     RUNTIME_REPO: "https://flathub.org/repo/flathub.flatpakrepo"
 
+  before_script:
+    - dnf install -y moreutils
   script:
-    - flatpak-builder --repo ${REPO} app flatpak/${APP_ID}.yaml
-    - flatpak build-bundle --runtime-repo=${RUNTIME_REPO} ${REPO} ${BUNDLE} ${APP_ID}
+    - flatpak-builder --repo ${REPO} app flatpak/${APP_ID}.yaml 2>&1 | ts
+    - flatpak build-bundle --runtime-repo=${RUNTIME_REPO} ${REPO} ${BUNDLE} ${APP_ID} | ts
 
   artifacts:
     paths:
