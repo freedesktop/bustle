@@ -52,3 +52,17 @@ flatpak-build:
     key: "flatpak-builder-cache"
     paths:
       - .flatpak-builder/cache
+
+push-translations:
+  stage: lint
+  image: debian:unstable
+  only:
+    refs:
+    - master
+    - transifex
+  before_script:
+    - apt update
+    - apt install -y transifex-client
+  script:
+    - env
+    - tx push --source --no-interactive
