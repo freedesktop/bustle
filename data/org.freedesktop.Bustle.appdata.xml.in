@@ -2,7 +2,9 @@
 <!-- Copyright 2014 Philip Withnall <philip@tecnocode.co.uk> -->
 <!-- Copyright 2016–2018 Will Thompson <will@willthompson.co.uk> -->
 <component type="desktop-application">
-	<id>org.freedesktop.Bustle.desktop</id>
+	<id>org.freedesktop.Bustle</id>
+	<launchable type="desktop-id">org.freedesktop.Bustle.desktop</launchable>
+	<content_rating type="oars-1.1" />
 	<metadata_license>CC-BY-SA-3.0</metadata_license>
 	<name>Bustle</name>
 	<summary>Draw sequence diagrams of D-Bus activity</summary>
