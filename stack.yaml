@@ -1,4 +1,4 @@
-resolver: nightly-2018-07-09
+resolver: lts-12.20
 packages:
 - .
 allow-newer: true
