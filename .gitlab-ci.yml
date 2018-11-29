@@ -3,7 +3,7 @@ stages:
   - build
 
 variables:
-  ZENHASKELL_IMAGE: "zenhaskell/gtk:nightly-2018-07-09"
+  ZENHASKELL_IMAGE: "zenhaskell/gtk:lts-12.20"
 
 lint:
   stage: lint

@@ -1,8 +1,9 @@
-resolver: nightly-2018-07-09
+resolver: lts-12.20
 packages:
 - .
 allow-newer: true
 extra-deps:
 - hgettext-0.1.31.0
 - pcap-0.4.5.2
-
+nix:
+  packages: [libpcap, pkgconfig, libxml2, glib, cairo, pango, gnome3.gtk]
