@@ -774,16 +774,12 @@ cancellable_cancelled_cb (GCancellable *cancellable,
     }
 }
 
-static gboolean
-initable_init (
-    GInitable *initable,
-    GCancellable *cancellable,
-    GError **error)
+static const char **
+build_argv (BustlePcapMonitor *self,
+            GError **error)
 {
-  BustlePcapMonitor *self = BUSTLE_PCAP_MONITOR (initable);
-  gboolean in_flatpak = g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS);
   g_autoptr(GPtrArray) dbus_monitor_argv = g_ptr_array_sized_new (8);
-  GInputStream *stdout_pipe = NULL;
+  gboolean in_flatpak = g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS);
 
   if (in_flatpak)
     {
@@ -818,10 +814,37 @@ initable_init (
       default:
         g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
             "Can only log the session bus, system bus, or a given address");
-        return FALSE;
+        return NULL;
     }
 
   g_ptr_array_add (dbus_monitor_argv, NULL);
+  return (const char **) g_ptr_array_free (g_steal_pointer (&dbus_monitor_argv), FALSE);
+}
+
+static GSubprocess *
+spawn_monitor (BustlePcapMonitor *self,
+               const char *const *argv,
+               GError **error)
+{
+  g_autoptr(GSubprocessLauncher) launcher =
+    g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_PIPE);
+
+  return g_subprocess_launcher_spawnv (launcher, argv, error);
+}
+
+static gboolean
+initable_init (
+    GInitable *initable,
+    GCancellable *cancellable,
+    GError **error)
+{
+  BustlePcapMonitor *self = BUSTLE_PCAP_MONITOR (initable);
+  g_autofree const char **argv = NULL;
+  GInputStream *stdout_pipe = NULL;
+
+  argv = build_argv (self, error);
+  if (NULL == argv)
+    return FALSE;
 
   if (self->filename == NULL)
     {
@@ -851,13 +874,9 @@ initable_init (
       return FALSE;
     }
 
-  self->dbus_monitor = g_subprocess_newv (
-      (const gchar * const *) dbus_monitor_argv->pdata,
-      G_SUBPROCESS_FLAGS_STDOUT_PIPE, error);
+  self->dbus_monitor = spawn_monitor (self, (const char * const *) argv, error);
   if (self->dbus_monitor == NULL)
-    {
-      return FALSE;
-    }
+    return FALSE;
 
   stdout_pipe = g_subprocess_get_stdout_pipe (self->dbus_monitor);
   g_return_val_if_fail (stdout_pipe != NULL, FALSE);
