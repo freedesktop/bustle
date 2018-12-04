@@ -208,7 +208,7 @@ stopped_cb (
   GMainLoop *loop = user_data;
 
   if (!(domain == G_IO_ERROR && code == G_IO_ERROR_CANCELLED))
-    fprintf (stderr, "Error: %s %d %s", g_quark_to_string (domain), code, message);
+    g_printerr ("Error while monitoring: %s\n", message);
 
   g_main_loop_quit (loop);
 }
@@ -230,7 +230,7 @@ main (
 {
   GMainLoop *loop;
   gchar *filename;
-  GError *error = NULL;
+  g_autoptr(GError) error = NULL;
   BustlePcapMonitor *pcap;
 
   parse_arguments (&argc, &argv, &filename);
@@ -238,9 +238,8 @@ main (
   pcap = bustle_pcap_monitor_new (bus_type, address, filename, &error);
   if (pcap == NULL)
     {
-      fprintf (stderr, "%s %d %s",
-          g_quark_to_string (error->domain), error->code, error->message);
-      g_clear_error (&error);
+      g_printerr ("Failed to start monitor: %s\n",
+                  error->message);
       exit (1);
     }
 
