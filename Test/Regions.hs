@@ -13,10 +13,20 @@ newtype NonOverlappingStripes = NonOverlappingStripes [Stripe]
   deriving
     (Show, Eq, Ord)
 
+paste :: [a] -> [(a, a)]
+
 instance Arbitrary NonOverlappingStripes where
     arbitrary = do
-        -- listOf2
-        tops <- sort <$> ((:) <$> arbitrary <*> listOf1 arbitrary)
+        xs <- listOf1 arbitrary
+        ys <- vectorOf (length xs) arbitrary
+
+        nub . sort 
+
+
+        xs <- nub . sort . map (getNonNegative) <$> listOf1 arbitrary
+
+        heights <- 
+
 
         -- Generate dense stripes sometimes
         let g :: Gen Double
@@ -45,7 +55,9 @@ instance (Eq a, Arbitrary a) => Arbitrary (RegionSelection a) where
         ValidRegions rs <- arbitrary
         return $ regionSelectionNew rs
 
-prop_NonOverlapping_generator_works (NonOverlappingStripes ss) = nonOverlapping ss
+prop_NonOverlapping_generator_works (NonOverlappingStripes ss) = all coherent ss && nonOverlapping ss
+  where
+    coherent s = stripeTop s < stripeBottom s
 
 prop_InitiallyUnselected rs = isNothing $ rsCurrent rs
 prop_UpDoesNothing rs = isNothing $ rsCurrent $ regionSelectionUp rs
