@@ -2,8 +2,10 @@
 import Test.QuickCheck
 import Test.QuickCheck.All
 
+import Control.Monad (when)
 import Data.List (sort, group)
 import Data.Maybe (isNothing, isJust)
+import System.Exit (exitFailure)
 
 import Bustle.Regions
 
@@ -175,5 +177,5 @@ return []
 runTests = $quickCheckAll
 
 main = do
-    runTests
-    return ()
+    success <- runTests
+    when (not success) exitFailure
