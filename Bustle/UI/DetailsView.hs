@@ -96,6 +96,14 @@ getErrorName (Detailed _ _ _ rm) = case rm of
     (D.ReceivedMethodError _ (MethodError { methodErrorName = ErrorName en})) -> Just en
     _                                                                         -> Nothing
 
+getErrorMessage :: Detailed a
+                -> Maybe String
+getErrorMessage (Detailed _ _ _ (D.ReceivedMethodError _ (MethodError _ _ _ _ body))) =
+    case D.fromVariant <$> body of
+        [message] -> message
+        _         -> Nothing
+getErrorMessage _ = Nothing
+
 formatMessage :: Detailed Message -> String
 formatMessage (Detailed _ _ _ rm) =
     formatArgs $ D.receivedMessageBody rm
@@ -135,6 +143,8 @@ detailsViewUpdate d m = do
 
     labelSetText (detailsPath d) (maybe unknown (D.formatObjectPath . path) member_)
     labelSetMarkup (detailsMember d) (maybe unknown getMemberMarkup member_)
-    textBufferSetText buf $ formatMessage m
+    textBufferSetText buf $ case getErrorMessage m of
+        Just message -> message
+        Nothing      -> formatMessage m
   where
     unknown = ""
