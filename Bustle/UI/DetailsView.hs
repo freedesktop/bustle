@@ -93,23 +93,19 @@ getDestination (Detailed _ m _ _) = case m of
 
 getErrorName :: Detailed a -> Maybe String
 getErrorName (Detailed _ _ _ rm) = case rm of
-    (D.ReceivedMethodError _ (MethodError { methodErrorName = ErrorName en})) -> Just en
-    _                                                                         -> Nothing
-
-getErrorMessage :: Detailed a
-                -> Maybe String
-getErrorMessage (Detailed _ _ _ (D.ReceivedMethodError _ (MethodError _ _ _ _ body))) =
-    case D.fromVariant <$> body of
-        [message] -> message
-        _         -> Nothing
-getErrorMessage _ = Nothing
+    D.ReceivedMethodError _ MethodError{ methodErrorName = ErrorName en} -> Just en
+    _                                                                    -> Nothing
 
 formatMessage :: Detailed Message -> String
 formatMessage (Detailed _ _ _ rm) =
-    formatArgs $ D.receivedMessageBody rm
+    case (rm, D.fromVariant <$> body) of
+        -- Special-case errors, which (are supposed to) have a single
+        -- human-readable string argument
+        (D.ReceivedMethodError _ _, [Just message]) -> message
+        _                                           -> formatted
   where
-    formatArgs = intercalate "\n" . map (format_Variant VariantStyleSignature)
--- TODO: suppress escaping and type sig for errors, which are always (s)
+    body = D.receivedMessageBody rm
+    formatted = intercalate "\n" $ map (format_Variant VariantStyleSignature) body
 
 detailsViewGetTop :: DetailsView -> Widget
 detailsViewGetTop = toWidget . detailsGrid
@@ -117,15 +113,13 @@ detailsViewGetTop = toWidget . detailsGrid
 setOptionalRow :: OptionalRow
                -> Maybe String
                -> IO ()
-setOptionalRow (caption, label) s_ = do
-    case s_ of
-        Just s -> do
-            labelSetText label s
-            widgetShow label
-            widgetShow caption
-        Nothing -> do
-            widgetHide label
-            widgetHide caption
+setOptionalRow (caption, label) (Just s) = do
+    labelSetText label s
+    widgetShow label
+    widgetShow caption
+setOptionalRow (caption, label) Nothing = do
+    widgetHide label
+    widgetHide caption
 
 detailsViewUpdate :: DetailsView
                   -> Detailed Message
@@ -143,8 +137,6 @@ detailsViewUpdate d m = do
 
     labelSetText (detailsPath d) (maybe unknown (D.formatObjectPath . path) member_)
     labelSetMarkup (detailsMember d) (maybe unknown getMemberMarkup member_)
-    textBufferSetText buf $ case getErrorMessage m of
-        Just message -> message
-        Nothing      -> formatMessage m
+    textBufferSetText buf (formatMessage m)
   where
     unknown = ""
