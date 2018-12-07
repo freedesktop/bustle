@@ -2,7 +2,9 @@
 <!-- Copyright 2014 Philip Withnall <philip@tecnocode.co.uk> -->
 <!-- Copyright 2016–2018 Will Thompson <will@willthompson.co.uk> -->
 <component type="desktop-application">
-	<id>org.freedesktop.Bustle.desktop</id>
+	<id>org.freedesktop.Bustle</id>
+	<launchable type="desktop-id">org.freedesktop.Bustle.desktop</launchable>
+	<content_rating type="oars-1.1" />
 	<metadata_license>CC-BY-SA-3.0</metadata_license>
 	<name>Bustle</name>
 	<summary>Draw sequence diagrams of D-Bus activity</summary>
@@ -32,13 +34,19 @@
 			<caption>Relax with this soothing greyscale welcome page</caption>
 		</screenshot>
 	</screenshots>
-	<url type="homepage">https://www.freedesktop.org/wiki/Software/Bustle/</url>
+	<url type="homepage">https://gitlab.freedesktop.org/bustle/bustle#readme</url>
 	<update_contact>will_at_willthompson.co.uk</update_contact>
 	<translation type="gettext">bustle</translation>
 	<provides>
 		<id>bustle.desktop</id>
 	</provides>
 	<releases>
+		<release date="2018-12-07" version="0.7.4">
+			<description>
+				<p>In the details for an error reply, the error name is now shown, and the error message is formatted more legibly.</p>
+				<p>The default file extension for log files is now ‘.pcap’, reflecting what they actually are.</p>
+			</description>
+		</release>
 		<release date="2018-11-15" version="0.7.3">
 			<description>
 				<p>Bustle now handles the application/vnd.tcpdump.pcap MIME type, which in practice means that your file manager will offer to open pcap files with Bustle.</p>

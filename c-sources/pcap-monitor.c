@@ -18,17 +18,29 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#define _GNU_SOURCE
+
 #include "config.h"
 #include "pcap-monitor.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include <pcap/pcap.h>
+
+#include <glib.h>
+#include <glib/gstdio.h>
 #include <gio/gunixinputstream.h>
+
 
 /* Prefix of name claimed by the connection that collects name owners. */
 const char *BUSTLE_MONITOR_NAME_PREFIX = "org.freedesktop.Bustle.Monitor.";
+static gboolean RUNNING_IN_FLATPAK = FALSE;
 
 /*
  * Transitions:
@@ -85,6 +97,8 @@ typedef struct _BustlePcapMonitor {
 
     /* input */
     GSubprocess *dbus_monitor;
+    /* If >= 0, master side of controlling terminal for dbus_monitor */
+    int pt_master;
     GSource *dbus_monitor_source;
     pcap_t *pcap_in;
 
@@ -121,12 +135,24 @@ G_DEFINE_TYPE_WITH_CODE (BustlePcapMonitor, bustle_pcap_monitor, G_TYPE_OBJECT,
     G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, initable_iface_init);
     )
 
+/* A sad echo of the functions in libglnx. */
+static inline void *
+throw_errno (GError **error,
+             const gchar *prefix)
+{
+  int errsv = errno;
+  g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errsv),
+               "%s: %s", prefix, g_strerror (errsv));
+  return NULL;
+}
+
 static void
 bustle_pcap_monitor_init (BustlePcapMonitor *self)
 {
   self->bus_type = G_BUS_TYPE_SESSION;
   self->state = STATE_NEW;
   self->cancellable = g_cancellable_new ();
+  self->pt_master = -1;
 }
 
 static void
@@ -224,6 +250,12 @@ bustle_pcap_monitor_finalize (GObject *object)
   g_clear_error (&self->pcap_error);
   g_clear_error (&self->subprocess_error);
 
+  if (self->pt_master >= 0)
+    {
+      g_close (self->pt_master, NULL);
+      self->pt_master = -1;
+    }
+
   if (parent_class->finalize != NULL)
     parent_class->finalize (object);
 }
@@ -298,6 +330,8 @@ bustle_pcap_monitor_class_init (BustlePcapMonitorClass *klass)
       G_TYPE_UINT,
       G_TYPE_INT,
       G_TYPE_STRING);
+
+  RUNNING_IN_FLATPAK = g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS);
 }
 
 static void
@@ -580,6 +614,36 @@ dump_names_async (
   g_task_run_in_thread (task, dump_names_thread_func);
 }
 
+/**
+ * send_sigint:
+ *
+ * Send SIGINT to the dbus-monitor subprocess, in as many ways as possible.
+ */
+static void
+send_sigint (BustlePcapMonitor *self)
+{
+  /* Send the signal directly; this has no effect on the privileged subprocess
+   * used on the system bus.
+   */
+  if (self->dbus_monitor != NULL)
+    g_subprocess_send_signal (self->dbus_monitor, SIGINT);
+
+  /* Send it via the PTY that we set as the subprocess's controlling terminal;
+   * this works even for a privileged child.
+   */
+  if (self->pt_master >= 0)
+    {
+      char ctrl_c = '\x03';
+
+      if (write (self->pt_master, &ctrl_c, 1) != 1)
+        {
+          g_autoptr(GError) local_error = NULL;
+          throw_errno (&local_error, "write to pt_master failed");
+          g_warning ("%s: %s", G_STRFUNC, local_error->message);
+        }
+    }
+}
+
 static gboolean
 start_pcap (
     BustlePcapMonitor *self,
@@ -599,9 +663,10 @@ start_pcap (
   dbus_monitor_filep = fdopen (stdout_fd, "r");
   if (dbus_monitor_filep == NULL)
     {
-      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno), "fdopen");
+      throw_errno (error, "fdopen failed");
       return FALSE;
     }
+
   /* fd is owned by the FILE * now */
   g_unix_input_stream_set_close_fd (G_UNIX_INPUT_STREAM (stdout_pipe), FALSE);
 
@@ -619,10 +684,8 @@ start_pcap (
       /* Cause dbus-monitor to exit next time it tries to write a message */
       g_clear_pointer (&dbus_monitor_filep, fclose);
 
-      /* And try to terminate it immediately. When spawning via pkexec we may
-       * not be able to kill it.
-       */
-      g_subprocess_force_exit (self->dbus_monitor);
+      /* And try to terminate it immediately. */
+      send_sigint (self);
 
       return FALSE;
     }
@@ -737,9 +800,7 @@ wait_check_cb (
 
   /* cases:
    * - G_SPAWN_ERROR / G_SPAWN_ERROR_FAILED / "Child process killed by signal N":
-   *   dbus-monitor was killed, possibly by us calling
-   *   g_subprocess_force_exit(), though this doesn't work for pkexec'd
-   *   dbus-monitor
+   *   dbus-monitor was killed, presumably by send_sigint()
    * - G_SPAWN_EXIT_ERROR:
    *   - 0: bus itself went away (assuming pkexec/flatpak-spawn propagate
    *        errors correctly)
@@ -765,27 +826,17 @@ cancellable_cancelled_cb (GCancellable *cancellable,
    */
   g_clear_pointer (&self->pcap_in, pcap_close);
 
-  if (self->dbus_monitor != NULL)
-    {
-      /* Try to make it stop sooner; this has no effect on a privileged
-       * dbus-monitor.
-       */
-      g_subprocess_force_exit (self->dbus_monitor);
-    }
+  /* And try to terminate it immediately. */
+  send_sigint (self);
 }
 
-static gboolean
-initable_init (
-    GInitable *initable,
-    GCancellable *cancellable,
-    GError **error)
+static const char **
+build_argv (BustlePcapMonitor *self,
+            GError **error)
 {
-  BustlePcapMonitor *self = BUSTLE_PCAP_MONITOR (initable);
-  gboolean in_flatpak = g_file_test ("/.flatpak-info", G_FILE_TEST_EXISTS);
   g_autoptr(GPtrArray) dbus_monitor_argv = g_ptr_array_sized_new (8);
-  GInputStream *stdout_pipe = NULL;
 
-  if (in_flatpak)
+  if (RUNNING_IN_FLATPAK)
     {
       g_ptr_array_add (dbus_monitor_argv, "flatpak-spawn");
       g_ptr_array_add (dbus_monitor_argv, "--host");
@@ -818,10 +869,81 @@ initable_init (
       default:
         g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
             "Can only log the session bus, system bus, or a given address");
-        return FALSE;
+        return NULL;
     }
 
   g_ptr_array_add (dbus_monitor_argv, NULL);
+  return (const char **) g_ptr_array_free (g_steal_pointer (&dbus_monitor_argv), FALSE);
+}
+
+/**
+ * set_controlling_tty_to_stdin:
+ *
+ * child_setup function for the dbus-monitor subprocess which arranges for its
+ * controlling TTY to be a PTY, so we can send SIGINT to it even if it's
+ * privileged.
+ */
+static void
+set_controlling_tty_to_stdin (void *user_data G_GNUC_UNUSED)
+{
+  /* Move this child process to a new session, unsetting any existing
+   * controlling terminal.
+   */
+  setsid ();
+
+  /* Make stdin (the worker end of a PTY pair) the controlling terminal for
+   * this child process.
+   */
+  ioctl (STDIN_FILENO, TIOCSCTTY, 0);
+}
+
+static GSubprocess *
+spawn_monitor (BustlePcapMonitor *self,
+               const char *const *argv,
+               GError **error)
+{
+  g_autoptr(GSubprocessLauncher) launcher =
+    g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_PIPE);
+
+  self->pt_master = posix_openpt (O_RDWR | O_NOCTTY | O_CLOEXEC);
+  if (self->pt_master < 0)
+    return throw_errno (error, "posix_openpt failed");
+
+  if (unlockpt (self->pt_master) < 0)
+    return throw_errno (error, "unlockpt failed");
+
+  char sname[PATH_MAX] = { 0 };
+  if (ptsname_r (self->pt_master, sname, G_N_ELEMENTS (sname)) != 0)
+    return throw_errno (error, "ptsname_r failed");
+
+  int pt_slave = open (sname, O_RDWR);
+  if (pt_slave < 0)
+    return throw_errno (error, "open(sname) failed");
+
+  g_subprocess_launcher_take_stdin_fd (launcher, pt_slave);
+  if (!RUNNING_IN_FLATPAK)
+    g_subprocess_launcher_set_child_setup (launcher, set_controlling_tty_to_stdin, NULL, NULL);
+  /* otherwise, the session-helper process already does this for us */
+
+  GSubprocess *child = g_subprocess_launcher_spawnv (launcher, argv, error);
+
+  g_close (pt_slave, NULL);
+  return child;
+}
+
+static gboolean
+initable_init (
+    GInitable *initable,
+    GCancellable *cancellable,
+    GError **error)
+{
+  BustlePcapMonitor *self = BUSTLE_PCAP_MONITOR (initable);
+  g_autofree const char **argv = NULL;
+  GInputStream *stdout_pipe = NULL;
+
+  argv = build_argv (self, error);
+  if (NULL == argv)
+    return FALSE;
 
   if (self->filename == NULL)
     {
@@ -851,13 +973,9 @@ initable_init (
       return FALSE;
     }
 
-  self->dbus_monitor = g_subprocess_newv (
-      (const gchar * const *) dbus_monitor_argv->pdata,
-      G_SUBPROCESS_FLAGS_STDOUT_PIPE, error);
+  self->dbus_monitor = spawn_monitor (self, (const char * const *) argv, error);
   if (self->dbus_monitor == NULL)
-    {
-      return FALSE;
-    }
+    return FALSE;
 
   stdout_pipe = g_subprocess_get_stdout_pipe (self->dbus_monitor);
   g_return_val_if_fail (stdout_pipe != NULL, FALSE);

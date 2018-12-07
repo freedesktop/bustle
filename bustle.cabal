@@ -1,6 +1,6 @@
 Name:           bustle
 Category:       Network, Desktop
-Version:        0.7.3.1
+Version:        0.7.4
 Cabal-Version:  2.0
 Tested-With:    GHC == 8.4.3
 Synopsis:       Draw sequence diagrams of D-Bus traffic
@@ -9,7 +9,7 @@ License:        OtherLicense
 License-file:   LICENSE
 Author:         Will Thompson <will@willthompson.co.uk>
 Maintainer:     Will Thompson <will@willthompson.co.uk>
-Homepage:       https://www.freedesktop.org/wiki/Software/Bustle/
+Homepage:       https://gitlab.freedesktop.org/bustle/bustle#readme
 Data-files:     data/bustle.ui,
                 data/OpenTwoDialog.ui,
                 data/RecordAddressDialog.ui,

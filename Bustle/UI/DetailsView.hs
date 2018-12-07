@@ -28,19 +28,23 @@ import Data.List (intercalate)
 import Graphics.UI.Gtk hiding (Signal)
 
 import qualified DBus as D
+import DBus.Internal.Message (MethodError(..))
+import DBus.Internal.Types (ErrorName(..))
 
 import Bustle.Types
 import Bustle.Marquee
 import Bustle.VariantFormatter
 
+type OptionalRow = (Label, Label)
+
 data DetailsView =
     DetailsView { detailsGrid :: Grid
                 , detailsType :: Stack
                 , detailsSender :: Label
-                , detailsDestinationCaption :: Label
-                , detailsDestination :: Label
+                , detailsDestination :: OptionalRow
                 , detailsPath :: Label
                 , detailsMember :: Label
+                , detailsErrorName :: OptionalRow
                 , detailsBodyView :: TextView
                 }
 
@@ -50,11 +54,16 @@ detailsViewNew builder = DetailsView
     <$> builderGetObject builder castToGrid "detailsGrid"
     <*> builderGetObject builder castToStack "detailsType"
     <*> builderGetObject builder castToLabel "detailsSender"
-    <*> builderGetObject builder castToLabel "detailsDestinationCaption"
-    <*> builderGetObject builder castToLabel "detailsDestination"
+    <*> optionalRow "detailsDestination"
     <*> builderGetObject builder castToLabel "detailsPath"
     <*> builderGetObject builder castToLabel "detailsMember"
+    <*> optionalRow "detailsErrorName"
     <*> builderGetObject builder castToTextView "detailsArguments"
+  where
+    optionalRow labelId = (,)
+        <$> builderGetObject builder castToLabel (labelId ++ "Caption")
+        <*> builderGetObject builder castToLabel labelId
+
 
 pickType :: Detailed Message -> String
 pickType (Detailed _ m _ _) = case m of
@@ -82,14 +91,41 @@ getDestination (Detailed _ m _ _) = case m of
     Signal { signalDestination = d } -> d
     _                                -> Just (destination m)
 
+getErrorName :: Detailed a -> Maybe String
+getErrorName (Detailed _ _ _ rm) = case rm of
+    (D.ReceivedMethodError _ (MethodError { methodErrorName = ErrorName en})) -> Just en
+    _                                                                         -> Nothing
+
+getErrorMessage :: Detailed a
+                -> Maybe String
+getErrorMessage (Detailed _ _ _ (D.ReceivedMethodError _ (MethodError _ _ _ _ body))) =
+    case D.fromVariant <$> body of
+        [message] -> message
+        _         -> Nothing
+getErrorMessage _ = Nothing
+
 formatMessage :: Detailed Message -> String
 formatMessage (Detailed _ _ _ rm) =
     formatArgs $ D.receivedMessageBody rm
   where
     formatArgs = intercalate "\n" . map (format_Variant VariantStyleSignature)
+-- TODO: suppress escaping and type sig for errors, which are always (s)
 
 detailsViewGetTop :: DetailsView -> Widget
 detailsViewGetTop = toWidget . detailsGrid
+
+setOptionalRow :: OptionalRow
+               -> Maybe String
+               -> IO ()
+setOptionalRow (caption, label) s_ = do
+    case s_ of
+        Just s -> do
+            labelSetText label s
+            widgetShow label
+            widgetShow caption
+        Nothing -> do
+            widgetHide label
+            widgetHide caption
 
 detailsViewUpdate :: DetailsView
                   -> Detailed Message
@@ -102,17 +138,13 @@ detailsViewUpdate d m = do
     -- TODO: these would be a lot more useful if we could resolve unique names
     -- to/from well-known names and show both
     labelSetText (detailsSender d) (unBusName . sender . deEvent $ m)
-    case getDestination m of
-        Just n -> do
-            labelSetText (detailsDestination d) (unBusName n)
-            widgetShow (detailsDestination d)
-            widgetShow (detailsDestinationCaption d)
-        Nothing -> do
-            widgetHide (detailsDestination d)
-            widgetHide (detailsDestinationCaption d)
+    setOptionalRow (detailsDestination d) (unBusName <$> getDestination m)
+    setOptionalRow (detailsErrorName d) (getErrorName m)
 
     labelSetText (detailsPath d) (maybe unknown (D.formatObjectPath . path) member_)
     labelSetMarkup (detailsMember d) (maybe unknown getMemberMarkup member_)
-    textBufferSetText buf $ formatMessage m
+    textBufferSetText buf $ case getErrorMessage m of
+        Just message -> message
+        Nothing      -> formatMessage m
   where
     unknown = ""

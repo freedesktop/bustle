@@ -343,7 +343,7 @@ startRecording target = do
     let yyyy_mm_dd_hh_mm_ss = takeWhile (/= '.') (show zt)
 
     cacheDir <- io getCacheDir
-    let filename = cacheDir </> yyyy_mm_dd_hh_mm_ss <.> "bustle"
+    let filename = cacheDir </> yyyy_mm_dd_hh_mm_ss <.> "pcap"
 
     let title = printf (__ "Recording %s&#8230;") $ case target of
             Left BusTypeNone    -> error "whoops, this value shouldn't exist"

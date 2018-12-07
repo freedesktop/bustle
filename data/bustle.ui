@@ -726,7 +726,7 @@
                           </object>
                           <packing>
                             <property name="left_attach">0</property>
-                            <property name="top_attach">5</property>
+                            <property name="top_attach">6</property>
                           </packing>
                         </child>
                         <child>
@@ -747,7 +747,7 @@
                           </object>
                           <packing>
                             <property name="left_attach">1</property>
-                            <property name="top_attach">5</property>
+                            <property name="top_attach">6</property>
                           </packing>
                         </child>
                         <child>
@@ -886,6 +886,38 @@
                           <packing>
                             <property name="left_attach">1</property>
                             <property name="top_attach">2</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detailsErrorNameCaption">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="hexpand">False</property>
+                            <property name="label" translatable="yes">Error</property>
+                            <property name="xalign">1</property>
+                            <style>
+                              <class name="dim-label"/>
+                            </style>
+                          </object>
+                          <packing>
+                            <property name="left_attach">0</property>
+                            <property name="top_attach">5</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detailsErrorName">
+                            <property name="name">detailsMember</property>
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="hexpand">True</property>
+                            <property name="label">com.example.Placeholder.Error.OhNo</property>
+                            <property name="selectable">True</property>
+                            <property name="ellipsize">start</property>
+                            <property name="xalign">0</property>
+                          </object>
+                          <packing>
+                            <property name="left_attach">1</property>
+                            <property name="top_attach">5</property>
                           </packing>
                         </child>
                       </object>

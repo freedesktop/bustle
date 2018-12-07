@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-11-15 08:51+0000\n"
+"POT-Creation-Date: 2018-12-07 09:43+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -27,7 +27,7 @@ msgstr ""
 
 #: Bustle/UI/AboutDialog.hs:46 data/bustle.ui:101
 #: data/org.freedesktop.Bustle.desktop.in:3
-#: data/org.freedesktop.Bustle.appdata.xml.in:6
+#: data/org.freedesktop.Bustle.appdata.xml.in:9
 msgid "Bustle"
 msgstr ""
 
@@ -55,7 +55,7 @@ msgstr ""
 msgid "Couldn't save log: "
 msgstr ""
 
-#: Bustle/StatisticsPane.hs:222 data/bustle.ui:787
+#: Bustle/StatisticsPane.hs:222 data/bustle.ui:787 data/bustle.ui:896
 msgid "Error"
 msgstr ""
 
@@ -240,7 +240,7 @@ msgid "Destination"
 msgstr ""
 
 #: data/org.freedesktop.Bustle.desktop.in:4
-#: data/org.freedesktop.Bustle.appdata.xml.in:7
+#: data/org.freedesktop.Bustle.appdata.xml.in:10
 msgid "Draw sequence diagrams of D-Bus activity"
 msgstr ""
 
@@ -253,7 +253,7 @@ msgid "debug;profile;d-bus;dbus;sequence;monitor;"
 msgstr ""
 
 #. Translators: These are the application description paragraphs in the AppData file.
-#: data/org.freedesktop.Bustle.appdata.xml.in:10
+#: data/org.freedesktop.Bustle.appdata.xml.in:13
 msgid ""
 "Bustle draws sequence diagrams of D-Bus activity. It shows signal emissions, "
 "method calls and their corresponding returns, with time stamps for each "
@@ -263,51 +263,63 @@ msgid ""
 "statistics like signal frequencies and average method call times."
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:23
+#: data/org.freedesktop.Bustle.appdata.xml.in:26
 msgid "Explore sequence diagrams of D-Bus activity"
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:27
+#: data/org.freedesktop.Bustle.appdata.xml.in:30
 msgid "See statistics summarizing the log"
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:31
+#: data/org.freedesktop.Bustle.appdata.xml.in:34
 msgid "Relax with this soothing greyscale welcome page"
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:43
+#: data/org.freedesktop.Bustle.appdata.xml.in:46
+msgid ""
+"In the details for an error reply, the error name is now shown, and the "
+"error message is formatted more legibly."
+msgstr ""
+
+#: data/org.freedesktop.Bustle.appdata.xml.in:47
+msgid ""
+"The default file extension for log files is now ‘.pcap’, reflecting what "
+"they actually are."
+msgstr ""
+
+#: data/org.freedesktop.Bustle.appdata.xml.in:52
 msgid ""
 "Bustle now handles the application/vnd.tcpdump.pcap MIME type, which in "
 "practice means that your file manager will offer to open pcap files with "
 "Bustle."
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:48
+#: data/org.freedesktop.Bustle.appdata.xml.in:57
 msgid ""
 "You can now explore messages while they're being recorded. (Filtering, "
 "statistics and exporting are still only available once you stop recording.)"
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:49
+#: data/org.freedesktop.Bustle.appdata.xml.in:58
 msgid ""
 "The raw sender and destination for each message is now shown in the details "
 "pane."
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:50
+#: data/org.freedesktop.Bustle.appdata.xml.in:59
 msgid ""
 "Bytestrings with embedded NULs which are otherwise ASCII are now shown as "
 "ASCII strings."
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:55
+#: data/org.freedesktop.Bustle.appdata.xml.in:64
 msgid ""
 "It's now possible to monitor the system bus (from the user interface and "
 "with the bustle-pcap command-line tool), with no need to reconfigure the "
 "system bus. It's also possible to monitor an arbitrary bus by address."
 msgstr ""
 
-#: data/org.freedesktop.Bustle.appdata.xml.in:56
+#: data/org.freedesktop.Bustle.appdata.xml.in:65
 msgid ""
 "Bustle now requires that dbus-monitor (≥ 1.9.10) and pkexec are installed on "
 "your system."
