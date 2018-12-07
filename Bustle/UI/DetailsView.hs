@@ -113,15 +113,13 @@ detailsViewGetTop = toWidget . detailsGrid
 setOptionalRow :: OptionalRow
                -> Maybe String
                -> IO ()
-setOptionalRow (caption, label) s_ = do
-    case s_ of
-        Just s -> do
-            labelSetText label s
-            widgetShow label
-            widgetShow caption
-        Nothing -> do
-            widgetHide label
-            widgetHide caption
+setOptionalRow (caption, label) (Just s) = do
+    labelSetText label s
+    widgetShow label
+    widgetShow caption
+setOptionalRow (caption, label) Nothing = do
+    widgetHide label
+    widgetHide caption
 
 detailsViewUpdate :: DetailsView
                   -> Detailed Message
