@@ -34,9 +34,3 @@ version of the statistics shown in the UI:
 
     bustle --count logfile.bustle
     bustle --time logfile.bustle
-
-
-More information
-================
-
-See <https://www.freedesktop.org/wiki/Software/Bustle/>.

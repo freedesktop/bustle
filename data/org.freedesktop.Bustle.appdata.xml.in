@@ -34,7 +34,7 @@
 			<caption>Relax with this soothing greyscale welcome page</caption>
 		</screenshot>
 	</screenshots>
-	<url type="homepage">https://www.freedesktop.org/wiki/Software/Bustle/</url>
+	<url type="homepage">https://gitlab.freedesktop.org/bustle/bustle#readme</url>
 	<update_contact>will_at_willthompson.co.uk</update_contact>
 	<translation type="gettext">bustle</translation>
 	<provides>
