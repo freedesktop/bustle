@@ -1,6 +1,6 @@
 Name:           bustle
 Category:       Network, Desktop
-Version:        0.7.3.1
+Version:        0.7.4
 Cabal-Version:  2.0
 Tested-With:    GHC == 8.4.3
 Synopsis:       Draw sequence diagrams of D-Bus traffic

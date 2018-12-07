@@ -1,3 +1,22 @@
+Bustle 0.7.4 (2018-12-07)
+-------------------------
+
+User-facing changes:
+
+* In the details for an error reply, the error name is now shown, and
+  the error message is formatted more legibly.
+* The default file extension for log files is now `.pcap`, reflecting
+  what they actually are.
+
+Internal changes:
+
+* When you stop monitoring the system bus, the privileged dbus-monitor
+  process is now terminated promptly, rather than dying with “Broken
+  pipe” the next time a message is sent on the bus.
+* Update all links to <https://gitlab.freedesktop.org/bustle/bustle> or
+  <https://gitlab.freedesktop.org/bustle/bustle#readme> depending on
+  context.
+
 Bustle 0.7.3 (2018-11-15)
 -------------------------
 
