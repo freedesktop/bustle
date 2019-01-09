@@ -11,6 +11,7 @@ Author:         Will Thompson <will@willthompson.co.uk>
 Maintainer:     Will Thompson <will@willthompson.co.uk>
 Homepage:       https://gitlab.freedesktop.org/bustle/bustle#readme
 Data-files:     data/bustle.ui,
+                data/FilterDialog.ui,
                 data/OpenTwoDialog.ui,
                 data/RecordAddressDialog.ui,
                 LICENSE
