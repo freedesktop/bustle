@@ -30,7 +30,6 @@ import Control.Monad.Except
 
 import Data.IORef
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import Data.List (intercalate)
 import Data.Time
 import Data.Tuple (swap)
@@ -672,7 +671,7 @@ displayLog wi@WindowInfo { wiWindow = window
            rr = io $ void $ do
     wiSetLogDetails wi logDetails
 
-    hiddenRef <- newIORef Set.empty
+    nameFilterRef <- newIORef emptyNameFilter
 
     updateDisplayedLog wi rr
 
@@ -698,10 +697,11 @@ displayLog wi@WindowInfo { wiWindow = window
 
     widgetSetSensitivity filterNames True
     onMenuItemActivate filterNames $ do
-        hidden <- readIORef hiddenRef
-        hidden' <- runFilterDialog window (sessionParticipants $ rrApplications rr) hidden
-        writeIORef hiddenRef hidden'
-        let rr' = processWithFilters (sessionMessages, hidden') (systemMessages, Set.empty)
+        nameFilter <- readIORef nameFilterRef
+        -- FIXME: also allow filtering system bus in two-bus case
+        nameFilter' <- runFilterDialog window (sessionParticipants $ rrApplications rr) nameFilter
+        writeIORef nameFilterRef nameFilter'
+        let rr' = processWithFilters (sessionMessages, nameFilter') (systemMessages, emptyNameFilter)
 
         updateDisplayedLog wi rr'
 

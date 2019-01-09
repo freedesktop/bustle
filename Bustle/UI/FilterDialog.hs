@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-
 Bustle.UI.FilterDialog: allows the user to filter the displayed log
@@ -24,20 +23,35 @@ module Bustle.UI.FilterDialog
   )
 where
 
-import Data.List (intercalate, groupBy, elemIndices)
+import Control.Monad (forM, forM_)
+import Data.List (intercalate, groupBy, elemIndices, elemIndex)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Function as F
 
 import Graphics.UI.Gtk
+import Graphics.UI.Gtk.ModelView.CellRendererCombo (cellComboTextModel)
 
+import Bustle.Translation (__)
 import Bustle.Types
 
 import Paths_bustle
 
+data NameVisibility = NameVisibilityDefault
+                    | NameVisibilityOnly
+                    | NameVisibilityNever
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
+nameVisibilityName :: NameVisibility
+                   -> String
+nameVisibilityName v = case v of
+    NameVisibilityDefault -> __ "Default"
+    NameVisibilityOnly    -> __ "Only this"
+    NameVisibilityNever   -> __ "Hidden"
+
 data NameEntry = NameEntry { neUniqueName :: UniqueName
                            , neOtherNames :: Set OtherName
-                           , neVisible :: Bool
+                           , neVisibility :: NameVisibility
                            }
 
 namespace :: String
@@ -65,15 +79,26 @@ formatNames ne
 type NameStore = ListStore NameEntry
 
 makeStore :: [(UniqueName, Set OtherName)]
-          -> Set UniqueName
+          -> NameFilter
           -> IO NameStore
-makeStore names currentlyHidden =
+makeStore names nameFilter =
     listStoreNew $ map toNameEntry names
   where
     toNameEntry (u, os) = NameEntry { neUniqueName = u
                                     , neOtherNames = os
-                                    , neVisible = not (Set.member u currentlyHidden)
+                                    , neVisibility = toVisibility u
                                     }
+    toVisibility u | Set.member u (nfOnly nameFilter)  = NameVisibilityOnly
+                   | Set.member u (nfNever nameFilter) = NameVisibilityNever
+                   | otherwise                         = NameVisibilityDefault
+
+nameStoreUpdate :: NameStore
+                -> Int
+                -> (NameEntry -> NameEntry)
+                -> IO ()
+nameStoreUpdate nameStore i f = do
+    ne <- listStoreGetValue nameStore i
+    listStoreSetValue nameStore i $ f ne
 
 makeView :: NameStore
          -> TreeView
@@ -81,50 +106,99 @@ makeView :: NameStore
 makeView nameStore nameView = do
     treeViewSetModel nameView (Just nameStore)
 
-    tickyCell <- cellRendererToggleNew
-    tickyColumn <- treeViewColumnNew
-    treeViewColumnPackStart tickyColumn tickyCell True
-    treeViewAppendColumn nameView tickyColumn
-
-    cellLayoutSetAttributes tickyColumn tickyCell nameStore $ \ne ->
-        [ cellToggleActive := neVisible ne ]
-
-    on tickyCell cellToggled $ \pathstr -> do
-        let [i] = stringToTreePath pathstr
-        ne <- listStoreGetValue nameStore i
-        listStoreSetValue nameStore i (ne { neVisible = not (neVisible ne) })
-
+    -- Bus name column
     nameCell <- cellRendererTextNew
     nameColumn <- treeViewColumnNew
+    nameColumn `set` [ treeViewColumnTitle := __ "Bus Name"
+                     , treeViewColumnExpand := True
+                     ]
     treeViewColumnPackStart nameColumn nameCell True
     treeViewAppendColumn nameView nameColumn
 
     cellLayoutSetAttributes nameColumn nameCell nameStore $ \ne ->
         [ cellText := formatNames ne ]
 
+    -- TreeStore of possible visibility states
+    let nameVisibilities = [minBound..]
+    let nameVisibilityNames = map nameVisibilityName nameVisibilities
+    visibilityModel <- listStoreNew nameVisibilityNames
+    let visibilityNameCol = makeColumnIdString 1
+    treeModelSetColumn visibilityModel visibilityNameCol id
+
+    -- Visibility column
+    comboCell <- cellRendererComboNew
+    comboCell `set` [ cellTextEditable := True
+                    , cellComboHasEntry := False
+                    ]
+
+    comboColumn <- treeViewColumnNew
+    comboColumn `set` [ treeViewColumnTitle := __ "Visibility"
+                      , treeViewColumnExpand := False
+                      ]
+    treeViewColumnPackStart comboColumn comboCell True
+    treeViewAppendColumn nameView comboColumn
+
+    cellLayoutSetAttributes comboColumn comboCell nameStore $ \ne ->
+        [ cellComboTextModel := (visibilityModel, visibilityNameCol)
+        , cellText :=> do
+            let Just j = elemIndex (neVisibility ne) nameVisibilities
+            listStoreGetValue visibilityModel j
+        ]
+    comboCell `on` edited $ \[i] str -> do
+        let (Just j) = elemIndex str nameVisibilityNames
+        nameStoreUpdate nameStore i $ \ne ->
+            ne { neVisibility = nameVisibilities !! j }
+
+    return ()
+
+
 runFilterDialog :: WindowClass parent
                 => parent -- ^ The window to which to attach the dialog
                 -> [(UniqueName, Set OtherName)] -- ^ Names, in order of appearance
-                -> Set UniqueName -- ^ Currently-hidden names
-                -> IO (Set UniqueName) -- ^ The set of names to *hide*
-runFilterDialog parent names currentlyHidden = do
+                -> NameFilter -- ^ Current filter
+                -> IO NameFilter -- ^ New filter
+runFilterDialog parent names currentFilter = do
     builder <- builderNew
     builderAddFromFile builder =<< getDataFileName "data/FilterDialog.ui"
 
     d <- builderGetObject builder castToDialog ("filterDialog" :: String)
-    (windowWidth, windowHeight) <- windowGetSize parent
-    windowSetDefaultSize d (windowWidth * 7 `div` 8) (windowHeight `div` 2)
+    (_, windowHeight) <- windowGetSize parent
+    windowSetDefaultSize d (-1) (windowHeight * 3 `div` 4)
     d `set` [ windowTransientFor := parent ]
 
-    nameStore <- makeStore names currentlyHidden
+    nameStore <- makeStore names currentFilter
     makeView nameStore =<< builderGetObject builder castToTreeView ("filterTreeView" :: String)
+
+    resetButton <- builderGetObject builder castToButton ("resetButton" :: String)
+    resetButton `on` buttonActivated $ do
+        n <- listStoreGetSize nameStore
+        forM_ [0..n-1] $ \i ->
+            nameStoreUpdate nameStore i $ \ne -> ne { neVisibility = NameVisibilityDefault }
+
+    -- TODO: live-update the filter, and hence the view...? This callback is
+    -- grossly inefficient because in the rowChanged case we know what changed;
+    -- and in the initial case we can just look at currentFilter
+    let updateResetSensitivity = do
+            n <- listStoreGetSize nameStore
+            nes <- forM [0..n-1] $ listStoreGetValue nameStore
+            let vs = map neVisibility nes
+            widgetSetSensitive resetButton $ any (/= NameVisibilityDefault) vs
+    updateResetSensitivity
+    nameStore `on` rowChanged $ \_path _iter -> updateResetSensitivity
 
     _ <- dialogRun d
 
     widgetDestroy d
 
     results <- listStoreToList nameStore
-    return $ Set.fromList [ neUniqueName ne
-                          | ne <- results
-                          , not (neVisible ne)
-                          ]
+    let onlys = Set.fromList [ neUniqueName ne
+                             | ne <- results
+                             , neVisibility ne == NameVisibilityOnly
+                             ]
+        nevers = Set.fromList [ neUniqueName ne
+                              | ne <- results
+                              , neVisibility ne == NameVisibilityNever
+                              ]
+    return $ NameFilter { nfOnly = onlys
+                        , nfNever = nevers
+                        }
