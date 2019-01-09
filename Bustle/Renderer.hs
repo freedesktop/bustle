@@ -142,8 +142,8 @@ instance Semigroup apps => Semigroup (RendererResult apps) where
 instance Monoid apps => Monoid (RendererResult apps) where
     mempty = RendererResult 0 0 [] [] mempty []
 
-processWithFilters :: (Log, Set UniqueName)
-                   -> (Log, Set UniqueName)
+processWithFilters :: (Log, NameFilter)
+                   -> (Log, NameFilter)
                    -> RendererResult ()
 processWithFilters (sessionBusLog, sessionFilter)
                    (systemBusLog,  systemFilter ) =
@@ -159,7 +159,7 @@ process sessionBusLog systemBusLog =
 
 -- Doesn't let you filter
 rendererStateNew :: RendererState
-rendererStateNew = initialState Set.empty Set.empty
+rendererStateNew = initialState emptyNameFilter emptyNameFilter
 
 buildResult :: RendererOutput
             -> RendererState
@@ -243,7 +243,7 @@ data BusState =
              , nextColumn :: Double
              , columnsInUse :: Set Double
              , pending :: Pending
-             , bsIgnoredNames :: Set UniqueName
+             , bsFilter :: NameFilter
              }
 
 data RendererState =
@@ -254,7 +254,7 @@ data RendererState =
                   , startTime :: Microseconds
                   }
 
-initialBusState :: Set UniqueName
+initialBusState :: NameFilter
                 -> Double
                 -> BusState
 initialBusState ignore x =
@@ -263,17 +263,17 @@ initialBusState ignore x =
              , nextColumn = x
              , columnsInUse = Set.empty
              , pending = Map.empty
-             , bsIgnoredNames = ignore
+             , bsFilter = ignore
              }
 
-initialSessionBusState, initialSystemBusState :: Set UniqueName -> BusState
+initialSessionBusState, initialSystemBusState :: NameFilter -> BusState
 initialSessionBusState f =
     initialBusState f $ timestampAndMemberWidth + firstColumnOffset
 initialSystemBusState f =
     initialBusState f $ negate firstColumnOffset
 
-initialState :: Set UniqueName
-             -> Set UniqueName
+initialState :: NameFilter
+             -> NameFilter
              -> RendererState
 initialState sessionFilter systemFilter = RendererState
     { sessionBusState = initialSessionBusState sessionFilter
@@ -648,9 +648,12 @@ shouldShow :: Bus
            -> Message
            -> Renderer Bool
 shouldShow bus m = do
-    ignored <- getsBusState bsIgnoredNames bus
+    nameFilter <- getsBusState bsFilter bus
     names <- mapM (fmap fst . lookupApp bus) (mentionedNames m)
-    return $ Set.null (ignored `Set.intersection` Set.fromList names)
+    return $
+        not (any (flip Set.member $ nfNever nameFilter) names)
+        && (Set.null (nfOnly nameFilter)
+            || any (flip Set.member $ nfOnly nameFilter) names)
 
 processOne :: Bus
            -> Detailed Event

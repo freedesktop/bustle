@@ -38,6 +38,9 @@ module Bustle.Types
   , unOtherName
   , unBusName
 
+  , NameFilter(..)
+  , emptyNameFilter
+
   , dbusName
   , dbusInterface
 
@@ -68,6 +71,8 @@ import DBus ( ObjectPath, formatObjectPath
             )
 import Data.Maybe (maybeToList)
 import Data.Either (partitionEithers)
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 type Serial = Word32
 
@@ -94,6 +99,14 @@ unOtherName (OtherName x) = formatBusName x
 unBusName :: TaggedBusName -> String
 unBusName (U (UniqueName x)) = formatBusName x
 unBusName (O (OtherName  x)) = formatBusName x
+
+data NameFilter =
+    NameFilter { nfOnly :: Set UniqueName
+               , nfNever :: Set UniqueName
+               }
+
+emptyNameFilter :: NameFilter
+emptyNameFilter = NameFilter Set.empty Set.empty
 
 -- These useful constants disappeared from dbus in the grand removing of the
 -- -core suffix.
