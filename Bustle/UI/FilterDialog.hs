@@ -23,11 +23,12 @@ module Bustle.UI.FilterDialog
   )
 where
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM_)
 import Data.List (intercalate, groupBy, elemIndices, elemIndex)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Function as F
+import Data.IORef
 
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.ModelView.CellRendererCombo (cellComboTextModel)
@@ -172,33 +173,36 @@ runFilterDialog parent names currentFilter = do
     resetButton <- builderGetObject builder castToButton ("resetButton" :: String)
     resetButton `on` buttonActivated $ do
         n <- listStoreGetSize nameStore
-        forM_ [0..n-1] $ \i ->
-            nameStoreUpdate nameStore i $ \ne -> ne { neVisibility = NameVisibilityDefault }
+        forM_ [0..n-1] $ \i -> do
+            ne <- listStoreGetValue nameStore i
+            case neVisibility ne of
+                NameVisibilityDefault -> return ()
+                _                     -> listStoreSetValue nameStore i $
+                    ne { neVisibility = NameVisibilityDefault }
 
-    -- TODO: live-update the filter, and hence the view...? This callback is
-    -- grossly inefficient because in the rowChanged case we know what changed;
-    -- and in the initial case we can just look at currentFilter
+    -- TODO: expose this ref to the caller, with change notification, so the
+    -- diagram can update instantly
+    filterRef <- newIORef currentFilter
     let updateResetSensitivity = do
-            n <- listStoreGetSize nameStore
-            nes <- forM [0..n-1] $ listStoreGetValue nameStore
-            let vs = map neVisibility nes
-            widgetSetSensitive resetButton $ any (/= NameVisibilityDefault) vs
+            nf <- readIORef filterRef
+            let isEmpty = Set.null (nfOnly nf) && Set.null (nfNever nf)
+            widgetSetSensitive resetButton $ not isEmpty
+
     updateResetSensitivity
-    nameStore `on` rowChanged $ \_path _iter -> updateResetSensitivity
+    nameStore `on` rowChanged $ \[i] _iter -> do
+        ne <- listStoreGetValue nameStore i
+        let u = neUniqueName ne
+        -- Should we smush this into nameFilterModify, move the enum into
+        -- Bustle.Types?
+        let f = case neVisibility ne of
+                NameVisibilityDefault -> nameFilterRemove
+                NameVisibilityOnly    -> nameFilterAddOnly
+                NameVisibilityNever   -> nameFilterAddNever
+        modifyIORef' filterRef $ f u
+        updateResetSensitivity
 
     _ <- dialogRun d
 
     widgetDestroy d
 
-    results <- listStoreToList nameStore
-    let onlys = Set.fromList [ neUniqueName ne
-                             | ne <- results
-                             , neVisibility ne == NameVisibilityOnly
-                             ]
-        nevers = Set.fromList [ neUniqueName ne
-                              | ne <- results
-                              , neVisibility ne == NameVisibilityNever
-                              ]
-    return $ NameFilter { nfOnly = onlys
-                        , nfNever = nevers
-                        }
+    readIORef filterRef
