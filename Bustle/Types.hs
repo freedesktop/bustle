@@ -40,6 +40,9 @@ module Bustle.Types
 
   , NameFilter(..)
   , emptyNameFilter
+  , nameFilterAddOnly
+  , nameFilterAddNever
+  , nameFilterRemove
 
   , dbusName
   , dbusInterface
@@ -104,9 +107,28 @@ data NameFilter =
     NameFilter { nfOnly :: Set UniqueName
                , nfNever :: Set UniqueName
                }
+  deriving
+    (Show, Eq, Ord)
 
 emptyNameFilter :: NameFilter
 emptyNameFilter = NameFilter Set.empty Set.empty
+
+nameFilterModify :: (Set UniqueName -> Set UniqueName)
+                 -> (Set UniqueName -> Set UniqueName)
+                 -> NameFilter
+                 -> NameFilter
+nameFilterModify updateOnly updateNever nf =
+    nf { nfOnly = updateOnly $ nfOnly nf
+       , nfNever = updateNever $ nfNever nf
+       }
+
+nameFilterAddOnly, nameFilterAddNever, nameFilterRemove
+    :: UniqueName
+    -> NameFilter
+  -> NameFilter
+nameFilterAddOnly u  = nameFilterModify (Set.insert u) (Set.delete u)
+nameFilterAddNever u = nameFilterModify (Set.delete u) (Set.insert u)
+nameFilterRemove u   = nameFilterModify (Set.delete u) (Set.delete u)
 
 -- These useful constants disappeared from dbus in the grand removing of the
 -- -core suffix.
