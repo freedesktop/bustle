@@ -696,14 +696,12 @@ displayLog wi@WindowInfo { wiWindow = window
                     widgetHide sidebarHeader
 
     widgetSetSensitivity filterNames True
-    onMenuItemActivate filterNames $ do
-        nameFilter <- readIORef nameFilterRef
+    onMenuItemActivate filterNames $
         -- FIXME: also allow filtering system bus in two-bus case
-        nameFilter' <- runFilterDialog window (sessionParticipants $ rrApplications rr) nameFilter
-        writeIORef nameFilterRef nameFilter'
-        let rr' = processWithFilters (sessionMessages, nameFilter') (systemMessages, emptyNameFilter)
-
-        updateDisplayedLog wi rr'
+        runFilterDialog window (sessionParticipants $ rrApplications rr) nameFilterRef $ do
+            nameFilter <- readIORef nameFilterRef
+            let rr' = processWithFilters (sessionMessages, nameFilter) (systemMessages, emptyNameFilter)
+            updateDisplayedLog wi rr'
 
 showOpenDialog :: Window
                -> B ()
