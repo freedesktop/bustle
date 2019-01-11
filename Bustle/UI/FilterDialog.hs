@@ -152,13 +152,13 @@ makeView nameStore nameView = do
 
     return ()
 
-
 runFilterDialog :: WindowClass parent
                 => parent -- ^ The window to which to attach the dialog
                 -> [(UniqueName, Set OtherName)] -- ^ Names, in order of appearance
-                -> NameFilter -- ^ Current filter
-                -> IO NameFilter -- ^ New filter
-runFilterDialog parent names currentFilter = do
+                -> IORef NameFilter -- ^ Current filter
+                -> IO () -- ^ Callback when filter changes
+                -> IO ()
+runFilterDialog parent names filterRef callback = do
     builder <- builderNew
     builderAddFromFile builder =<< getDataFileName "data/FilterDialog.ui"
 
@@ -167,7 +167,7 @@ runFilterDialog parent names currentFilter = do
     windowSetDefaultSize d (-1) (windowHeight * 3 `div` 4)
     d `set` [ windowTransientFor := parent ]
 
-    nameStore <- makeStore names currentFilter
+    nameStore <- makeStore names =<< readIORef filterRef
     makeView nameStore =<< builderGetObject builder castToTreeView ("filterTreeView" :: String)
 
     resetButton <- builderGetObject builder castToButton ("resetButton" :: String)
@@ -180,9 +180,6 @@ runFilterDialog parent names currentFilter = do
                 _                     -> listStoreSetValue nameStore i $
                     ne { neVisibility = NameVisibilityDefault }
 
-    -- TODO: expose this ref to the caller, with change notification, so the
-    -- diagram can update instantly
-    filterRef <- newIORef currentFilter
     let updateResetSensitivity = do
             nf <- readIORef filterRef
             let isEmpty = Set.null (nfOnly nf) && Set.null (nfNever nf)
@@ -200,9 +197,8 @@ runFilterDialog parent names currentFilter = do
                 NameVisibilityNever   -> nameFilterAddNever
         modifyIORef' filterRef $ f u
         updateResetSensitivity
+        callback
 
     _ <- dialogRun d
 
     widgetDestroy d
-
-    readIORef filterRef
