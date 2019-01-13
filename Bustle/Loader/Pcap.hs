@@ -28,16 +28,12 @@ where
 
 import Data.Maybe (fromMaybe)
 import Data.Either (partitionEithers)
-import Data.List (isSuffixOf)
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Control.Exception (try, tryJust)
+import Control.Exception (try)
 import Control.Monad.State
 import System.IO.Error ( mkIOError
                        , userErrorType
-                       , isUserError
-                       , ioeGetErrorString
-                       , ioeSetErrorString
                        )
 
 import Network.Pcap
@@ -47,7 +43,6 @@ import DBus
 import qualified Data.ByteString as BS
 
 import qualified Bustle.Types as B
-import Bustle.Translation (__)
 
 -- Conversions from dbus-core's types into Bustle's more stupid types. This
 -- whole section is pretty upsetting.
