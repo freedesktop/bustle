@@ -59,10 +59,6 @@ data Bus = SessionBus
          | SystemBus
     deriving (Show, Eq, Ord)
 
-describeBus :: Bus -> String
-describeBus SessionBus = "session"
-describeBus SystemBus = "system"
-
 -- We keep the column in the map to allow the Monoid instance to preserve the
 -- ordering returned by sessionParticipants, which is the only view on this
 -- type exported.
@@ -244,6 +240,7 @@ data BusState =
              , columnsInUse :: Set Double
              , pending :: Pending
              , bsFilter :: NameFilter
+             , nextFakeName :: Integer
              }
 
 data RendererState =
@@ -264,6 +261,7 @@ initialBusState ignore x =
              , columnsInUse = Set.empty
              , pending = Map.empty
              , bsFilter = ignore
+             , nextFakeName = 0
              }
 
 initialSessionBusState, initialSystemBusState :: NameFilter -> BusState
@@ -359,18 +357,12 @@ lookupOtherName bus o = do
     case filter (Set.member o . aiCurrentNames . snd) (Map.assocs as) of
         [details] -> return details
 
-        -- No matches indicates a corrupt log, which we try to recover from …
+        -- No known owner for the well-known name. This happens in many cases,
+        -- especially when a method call causes service activation.
         []        -> do
-            warn $ concat [ "'"
-                          , unOtherName o
-                          , "' appeared unheralded on the "
-                          , describeBus bus
-                          , " bus; making something up..."
-                          ]
-            let namesInUse = Map.keys as
-                candidates = map (fakeUniqueName . show)
-                                 ([1..] :: [Integer])
-                u = head $ filter (not . (`elem` namesInUse)) candidates
+            n <- getsBusState nextFakeName bus
+            modifyBusState bus $ \bs -> bs { nextFakeName = n + 1 }
+            let u = fakeUniqueName (show n)
             addUnique bus u
             addOther bus o u
             ai <- lookupUniqueName bus u
