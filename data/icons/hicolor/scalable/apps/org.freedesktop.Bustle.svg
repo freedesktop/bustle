@@ -13,8 +13,8 @@
    height="605.06"
    id="svg2"
    version="1.1"
-   inkscape:version="0.48.4 r9939"
-   sodipodi:docname="bustle.svg">
+   inkscape:version="0.92.4 5da689c313, 2019-01-14"
+   sodipodi:docname="org.freedesktop.Bustle.svg">
   <defs
      id="defs4">
     <inkscape:path-effect
@@ -158,16 +158,16 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.59"
-     inkscape:cx="351.05408"
+     inkscape:cx="-181.14931"
      inkscape:cy="216.30891"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
-     inkscape:window-width="1388"
-     inkscape:window-height="833"
-     inkscape:window-x="50"
-     inkscape:window-y="223"
-     inkscape:window-maximized="0"
+     inkscape:window-width="3200"
+     inkscape:window-height="1671"
+     inkscape:window-x="0"
+     inkscape:window-y="55"
+     inkscape:window-maximized="1"
      fit-margin-top="0"
      fit-margin-left="0"
      fit-margin-right="0"
@@ -179,8 +179,10 @@
        visible="true"
        enabled="true"
        snapvisiblegridlinesonly="true"
-       originx="-56.941089px"
-       originy="-465.18127px" />
+       originx="-56.941089"
+       originy="-465.18127"
+       spacingx="1"
+       spacingy="1" />
   </sodipodi:namedview>
   <metadata
      id="metadata7">
@@ -213,24 +215,21 @@
        sodipodi:rx="130"
        sodipodi:ry="118.57143"
        d="m 511.42856,433.79074 a 130,118.57143 0 1 1 -260,0 130,118.57143 0 1 1 260,0 z"
-       transform="matrix(0.50880116,0,0,0.55776489,164.13818,45.848517)"
-       />
+       transform="matrix(0.50880116,0,0,0.55776489,164.13818,45.848517)" />
     <path
        style="fill:none;stroke:#000000;stroke-width:18.45480156;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
-       d="m 417.41556,287.80173 211.44171,0"
+       d="M 417.41556,287.80173 H 628.85727"
        id="path3757-7"
        inkscape:path-effect="#path-effect3759-7"
        inkscape:original-d="m 417.41556,287.80173 211.44171,0"
-       inkscape:connector-curvature="0"
-       />
+       inkscape:connector-curvature="0" />
     <path
        style="fill:none;stroke:#000000;stroke-width:18.17925262;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        d="m 294.08479,287.66116 -211.718251,0.2812"
        id="path3761-7"
        inkscape:path-effect="#path-effect3763-2"
        inkscape:original-d="m 294.08479,287.66116 -211.718251,0.2812"
-       inkscape:connector-curvature="0"
-       />
+       inkscape:connector-curvature="0" />
     <path
        style="fill:none;stroke:#000000;stroke-width:18.33793068;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        d="M 200.97285,226.67532 77.897224,289.6408 200.97285,348.92819"
@@ -238,8 +237,7 @@
        inkscape:path-effect="#path-effect3770-6"
        inkscape:original-d="M 200.97285,226.67532 77.897224,289.6408 200.97285,348.92819"
        inkscape:connector-curvature="0"
-       sodipodi:nodetypes="ccc"
-       />
+       sodipodi:nodetypes="ccc" />
     <path
        style="fill:none;stroke:#000000;stroke-width:18.33793068;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        d="M 520.66838,225.39683 643.74401,288.36232 520.66838,347.6497"
@@ -247,7 +245,6 @@
        inkscape:path-effect="#path-effect3770-3-1"
        inkscape:original-d="M 520.66838,225.39683 643.74401,288.36232 520.66838,347.6497"
        inkscape:connector-curvature="0"
-       sodipodi:nodetypes="ccc"
-       />
+       sodipodi:nodetypes="ccc" />
   </g>
 </svg>
