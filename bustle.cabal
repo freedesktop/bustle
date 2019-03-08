@@ -37,7 +37,6 @@ Extra-source-files:
 
                   -- wow many translate
                   , po/*.po
-                  , po/*.pot
 
                   -- intl bits
                   , data/org.freedesktop.Bustle.appdata.xml.in

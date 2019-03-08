@@ -9,6 +9,7 @@ bustle-pcap.1
 cabal-dev/
 .cabal-sandbox
 cabal.sandbox.config
+messages.pot
 org.freedesktop.Bustle.appdata.xml
 org.freedesktop.Bustle.desktop
 

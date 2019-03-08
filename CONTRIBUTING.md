@@ -35,7 +35,6 @@ Releasing Bustle
 
 * Ideally, automate the steps below
 * Write news in `NEWS.md` and `data/org.freedesktop.Bustle.appdata.xml.in`
-* Update `po/messages.pot`
 * Update version number in `bustle.cabal`
 
 ```sh
