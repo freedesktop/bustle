@@ -1,3 +1,17 @@
+Bustle 0.7.5 (2019-03-08)
+-------------------------
+
+User-facing changes:
+
+* As well as being able to filter out messages involving certain
+  services, you can now also filter messages to only show certain
+  services.
+
+Internal changes:
+
+* SVGs are now 256×256px to placate flatpak-validate-icon
+* Add Nix compatibility (Daniel Firth)
+
 Bustle 0.7.4 (2018-12-07)
 -------------------------
 
