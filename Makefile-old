@@ -26,9 +26,9 @@ ICONS = \
 
 all: $(BINARIES) $(MANPAGE) $(DESKTOP_FILE) $(APPDATA_FILE) $(ICONS)
 
-BUSTLE_PCAP_SOURCES = c-sources/pcap-monitor.c c-sources/bustle-pcap.c
+BUSTLE_PCAP_SOURCES = c-sources/pcap-monitor.c c-sources/bustle-pcap.c c-sources/bustle-pcap-reader.c
 BUSTLE_PCAP_GENERATED_HEADERS = dist/build/autogen/version.h
-BUSTLE_PCAP_HEADERS = c-sources/pcap-monitor.h $(BUSTLE_PCAP_GENERATED_HEADERS)
+BUSTLE_PCAP_HEADERS = c-sources/pcap-monitor.h c-sources/bustle-pcap-reader.h $(BUSTLE_PCAP_GENERATED_HEADERS)
 
 bustle-pcap.1: dist/build/bustle-pcap
 	help2man --output=$@ --no-info --name='Generate D-Bus logs for bustle' $<

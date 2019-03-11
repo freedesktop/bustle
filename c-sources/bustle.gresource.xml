@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/freedesktop/Bustle">
+    <file preprocess="xml-stripblanks">bustle-window.ui</file>
+  </gresource>
+</gresources>
+
