@@ -28,6 +28,7 @@ Extra-source-files:
                     NEWS.md,
                     CONTRIBUTING.md,
                     INSTALL.md,
+                    bustle.doap,
                     run-uninstalled.sh
                   , Test/data/log-with-h.bustle
 

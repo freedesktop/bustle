@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<Project xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:gnome="http://api.gnome.org/doap-extensions#" xmlns="http://usefulinc.com/ns/doap#">
+  <name xml:lang="en">Bustle</name>
+  <shortdesc xml:lang="en">Draw sequence diagrams of D-Bus activity</shortdesc>
+  <description xml:lang="en">Bustle draws sequence diagrams of D-Bus activity.
+    It shows signal emissions, method calls and their corresponding returns, with
+    time stamps for each individual event and the duration of each method call.
+    This can help you check for unwanted D-Bus traffic, and pinpoint why your
+    D-Bus-based application is not performing as well as you like. It also
+    provides statistics like signal frequencies and average method call
+    times.</description>
+  <download-page rdf:resource="https://www.freedesktop.org/software/bustle/"/>
+  <bug-database rdf:resource="https://gitlab.freedesktop.org/bustle/bustle/issues"/>
+  <category rdf:resource="http://api.gnome.org/doap-extensions#development"/>
+  <programming-language>Haskell</programming-language>
+  <maintainer>
+    <foaf:Person>
+      <foaf:name>Will Thompson</foaf:name>
+      <foaf:mbox rdf:resource="mailto:will@willthompson.co.uk"/>
+      <gnome:userid>wjt</gnome:userid>
+    </foaf:Person>
+  </maintainer>
+</Project>
