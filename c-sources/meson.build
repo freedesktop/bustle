@@ -1,6 +1,6 @@
 gnome = import('gnome')
 
-glib_version = '>= 2.54'
+glib_version = '>= 2.60'
 
 deps = [
   dependency('glib-2.0', version: glib_version),

@@ -156,14 +156,10 @@ add_term (GPtrArray   *terms,
 {
   if (string != NULL)
     {
-      gchar **new_terms = g_str_tokenize_and_fold (string, NULL, NULL);
+      g_auto(GStrv) new_terms = g_str_tokenize_and_fold (string, NULL, NULL);
 
-      /* TODO: intern these? */
       for (gchar **s = new_terms; *s != NULL; s++)
-        g_ptr_array_add (terms, *s);
-
-      /* Free the box */
-      g_free (new_terms);
+        g_ptr_array_add (terms, g_ref_string_new_intern (*s));
     }
 }
 
@@ -208,7 +204,7 @@ bustle_model_add_message (BustleModel  *self,
   GtkTreeIter self_iter;
   GtkTreeIter existing_iter;
   g_autoptr(GDBusMessage) counterpart = NULL;
-  g_autoptr(GPtrArray) terms = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) terms = g_ptr_array_new_with_free_func ((GDestroyNotify) g_ref_string_release);
 
   add_terms (terms, message);
 
