@@ -5,6 +5,13 @@ G_DEFINE_BOXED_TYPE (BustleNameModel, bustle_name_model, bustle_name_model_ref, 
 #define DAEMON_NAME "org.freedesktop.DBus"
 #define DAEMON_INTERFACE "org.freedesktop.DBus"
 
+#define MAX_LANE (((guint32) 2 << 30) - 1)
+
+typedef enum {
+  BUSTLE_NAME_MODEL_LANE_STATE_CURRENT = 0,
+  BUSTLE_NAME_MODEL_LANE_STATE_CLOSING = 1,
+} BustleNameModelLaneState;
+
 static gboolean
 name_is_unique (const gchar *name)
 {
@@ -14,15 +21,14 @@ name_is_unique (const gchar *name)
 }
 
 static inline gpointer
-bustle_name_model_lane_pack (guint lane,
+bustle_name_model_lane_pack (guint32                  lane,
                              BustleNameModelLaneState state)
 {
-  g_assert (lane < 2 << 30);
-  G_STATIC_ASSERT (_BUSTLE_NAME_MODEL_LANE_STATE_LAST < 2 << 2);
+  g_assert (lane <= MAX_LANE);
   g_assert (0 <= state);
-  g_assert (state <= _BUSTLE_NAME_MODEL_LANE_STATE_LAST);
+  g_assert (state < 2);
 
-  return GUINT_TO_POINTER ((lane << 2) | (guint) state);
+  return GUINT_TO_POINTER ((lane << 1) | (1 & (guint) state));
 }
 
 static inline void
@@ -33,9 +39,9 @@ bustle_name_model_lane_unpack (gpointer                  packed,
   guint packed_ = GPOINTER_TO_UINT (packed);
 
   if (lane != NULL)
-    *lane = packed_ >> 2;
+    *lane = packed_ >> 1;
   if (state != NULL)
-    *state = packed_ & 3;
+    *state = packed_ & 1;
 }
 struct _BustleNameModel
 {
@@ -52,7 +58,7 @@ struct _BustleNameModel
   GHashTable *lanes;
 
   /* Next free lane */
-  guint next_lane;
+  guint32 next_lane;
 };
 
 
@@ -202,10 +208,11 @@ bustle_name_model_assign_lane (BustleNameModel **self,
     {
       bustle_name_model_copy (self);
 
+      g_assert ((*self)->next_lane < MAX_LANE);
       g_hash_table_insert ((*self)->lanes,
                            (gpointer) owner,
                            bustle_name_model_lane_pack ((*self)->next_lane++,
-                                                        BUSTLE_NAME_MODEL_LANE_STATE_NEW));
+                                                        BUSTLE_NAME_MODEL_LANE_STATE_CURRENT));
     }
 }
 
@@ -408,21 +415,8 @@ bustle_name_model_advance_names (BustleNameModel **self)
       BustleNameModelLaneState state;
 
       bustle_name_model_lane_unpack (value, &lane, &state);
-      switch (state)
-        {
-        case BUSTLE_NAME_MODEL_LANE_STATE_NEW:
-          g_hash_table_iter_replace (&iter,
-                                     bustle_name_model_lane_pack (lane,
-                                                                  BUSTLE_NAME_MODEL_LANE_STATE_CURRENT));
-          break;
-        case BUSTLE_NAME_MODEL_LANE_STATE_CURRENT:
-          break;
-        case BUSTLE_NAME_MODEL_LANE_STATE_CLOSING:
-          g_hash_table_iter_remove (&iter);
-          break;
-        default:
-          g_assert_not_reached ();
-        }
+      if (state == BUSTLE_NAME_MODEL_LANE_STATE_CLOSING)
+        g_hash_table_iter_remove (&iter);
     }
 }
 
@@ -469,22 +463,39 @@ void
 bustle_name_model_name_iter_init (BustleNameModel         *self,
                                   BustleNameModelLaneIter *iter)
 {
+  g_return_if_fail (self != NULL);
+  g_return_if_fail (iter != NULL);
+
   g_hash_table_iter_init (iter, self->lanes);
 }
 
 gboolean
-bustle_name_model_name_iter_next (BustleNameModelLaneIter   *iter,
-                                  const gchar              **unique,
-                                  guint                     *lane,
-                                  BustleNameModelLaneState  *state)
+bustle_name_model_name_iter_next (BustleNameModelLaneIter  *iter,
+                                  const gchar             **unique,
+                                  guint32                  *lane)
 {
   gpointer key, value;
+
+  g_return_val_if_fail (iter != NULL, FALSE);
 
   if (!g_hash_table_iter_next (iter, &key, &value))
     return FALSE;
 
-  bustle_name_model_lane_unpack (value, lane, state);
+  if (unique != NULL)
+    *unique = key;
+
+  bustle_name_model_lane_unpack (value, lane, NULL);
   return TRUE;
+}
+
+gboolean
+bustle_name_model_has_unique_name (BustleNameModel *self,
+                                   const gchar     *unique)
+{
+  g_return_val_if_fail (self != NULL, FALSE);
+  g_return_val_if_fail (unique != NULL, FALSE);
+
+  return g_hash_table_contains (self->lanes, unique);
 }
 
 gboolean
@@ -492,6 +503,7 @@ bustle_name_model_get_lane (BustleNameModel *self,
                             const gchar     *name,
                             guint           *lane)
 {
+  g_return_val_if_fail (self != NULL, FALSE);
   g_return_val_if_fail (name != NULL, FALSE);
   g_return_val_if_fail (lane != NULL, FALSE);
 
@@ -508,14 +520,17 @@ bustle_name_model_get_lane (BustleNameModel *self,
   return FALSE;
 }
 
-guint
+guint32
 bustle_name_model_get_first_unused_lane (BustleNameModel *self)
 {
+  g_return_val_if_fail (self != NULL, G_MAXUINT32);
+
   return self->next_lane;
 }
 
 guint
 bustle_name_model_n_unique_names (BustleNameModel *self)
 {
+  g_return_val_if_fail (self != NULL, G_MAXUINT);
   return g_hash_table_size (self->owned_names);
 }

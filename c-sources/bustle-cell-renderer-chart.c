@@ -34,14 +34,18 @@ struct _BustleCellRendererChart
   GtkCellRenderer parent_instance;
 
   GDBusMessage *message;
+  BustleNameModel *name_model_prev;
   BustleNameModel *name_model;
+  BustleNameModel *name_model_next;
 };
 
 G_DEFINE_TYPE (BustleCellRendererChart, bustle_cell_renderer_chart, GTK_TYPE_CELL_RENDERER)
 
 typedef enum {
   PROP_DBUS_MESSAGE = 1,
+  PROP_NAME_MODEL_PREV,
   PROP_NAME_MODEL,
+  PROP_NAME_MODEL_NEXT,
   N_PROPS
 } BustleCellRendererChartProperty;
 
@@ -59,7 +63,9 @@ bustle_cell_renderer_chart_finalize (GObject *object)
   BustleCellRendererChart *self = (BustleCellRendererChart *)object;
 
   g_clear_object (&self->message);
+  g_clear_pointer (&self->name_model_prev, bustle_name_model_unref);
   g_clear_pointer (&self->name_model, bustle_name_model_unref);
+  g_clear_pointer (&self->name_model_next, bustle_name_model_unref);
 
   G_OBJECT_CLASS (bustle_cell_renderer_chart_parent_class)->finalize (object);
 }
@@ -78,8 +84,16 @@ bustle_cell_renderer_chart_get_property (GObject    *object,
       g_value_set_object (value, self->message);
       break;
 
+    case PROP_NAME_MODEL_PREV:
+      g_value_set_boxed (value, self->name_model_prev);
+      break;
+
     case PROP_NAME_MODEL:
       g_value_set_boxed (value, self->name_model);
+      break;
+
+    case PROP_NAME_MODEL_NEXT:
+      g_value_set_boxed (value, self->name_model_next);
       break;
 
     default:
@@ -101,9 +115,20 @@ bustle_cell_renderer_chart_set_property (GObject      *object,
       g_set_object (&self->message, g_value_dup_object (value));
       break;
 
+    case PROP_NAME_MODEL_PREV:
+      g_clear_pointer (&self->name_model_prev, bustle_name_model_unref);
+      self->name_model_prev = g_value_dup_boxed (value);
+      break;
+
     case PROP_NAME_MODEL:
       g_clear_pointer (&self->name_model, bustle_name_model_unref);
       self->name_model = g_value_dup_boxed (value);
+      g_assert (self->name_model != NULL);
+      break;
+
+    case PROP_NAME_MODEL_NEXT:
+      g_clear_pointer (&self->name_model_next, bustle_name_model_unref);
+      self->name_model_next = g_value_dup_boxed (value);
       break;
 
     default:
@@ -145,8 +170,8 @@ static void
 bustle_cell_renderer_chart_draw_arrow (cairo_t            *cr,
                                        const GdkRectangle *cell_area,
                                        const GdkRectangle *background_area,
-                                       guint               from_lane,
-                                       guint               to_lane,
+                                       guint32             from_lane,
+                                       guint32             to_lane,
                                        GDBusMessageType    message_type)
 {
   double from_x, to_x, y;
@@ -205,39 +230,37 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
 {
   BustleCellRendererChart *self = BUSTLE_CELL_RENDERER_CHART (cell);
   BustleNameModelLaneIter iter;
-  guint lane;
-  BustleNameModelLaneState state;
-
-  /* TODO: private data */
-  /* TODO: handle names entering & leaving, need adjacent states too */
+  const gchar *name;
+  guint32 lane;
 
   bustle_name_model_name_iter_init (self->name_model, &iter);
-  while (bustle_name_model_name_iter_next (&iter, NULL, &lane, &state))
+  while (bustle_name_model_name_iter_next (&iter, &name, &lane))
     {
       gdouble x = cell_area->x + (LANE_WIDTH / 2) + (lane * LANE_WIDTH);
       gdouble y1, y2;
 
-      switch (state)
+      if (self->name_model_prev == NULL ||
+          !bustle_name_model_has_unique_name (self->name_model_prev, name))
         {
-        case BUSTLE_NAME_MODEL_LANE_STATE_NEW:
+          /* arriving */
           y1 = background_area->y + background_area->height / 2;
-          y2 = background_area->y + background_area->height;
           /* TODO: draw a blob */
-          break;
-
-        case BUSTLE_NAME_MODEL_LANE_STATE_CURRENT:
+        }
+      else
+        {
           y1 = background_area->y;
-          y2 = background_area->y + background_area->height;
-          break;
+        }
 
-        case BUSTLE_NAME_MODEL_LANE_STATE_CLOSING:
-          y1 = background_area->y;
+      if (self->name_model_next == NULL ||
+          !bustle_name_model_has_unique_name (self->name_model_next, name))
+        {
+          /* leaving */
           y2 = background_area->y + background_area->height / 2;
           /* TODO: draw a blob */
-          break;
-
-        default:
-          g_assert_not_reached ();
+        }
+      else
+        {
+          y2 = background_area->y + background_area->height;
         }
 
       const Rgb *color = &palette[lane % PALETTE_SIZE];
@@ -250,7 +273,7 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
 
   const gchar *sender = g_dbus_message_get_sender (self->message);
   const gchar *destination = g_dbus_message_get_destination (self->message);
-  guint from_lane, to_lane;
+  guint32 from_lane, to_lane;
 
   if (sender != NULL)
     {
@@ -315,15 +338,38 @@ bustle_cell_renderer_chart_class_init (BustleCellRendererChartClass *klass)
   g_object_class_install_property (object_class, PROP_DBUS_MESSAGE,
                                    properties [PROP_DBUS_MESSAGE]);
 
+  properties [PROP_NAME_MODEL_PREV] =
+    g_param_spec_boxed ("name-model-prev",
+                        "NameModel",
+                        "Name model on the previous visible row, or NULL if "
+                        "this is the first visible row",
+                        BUSTLE_TYPE_NAME_MODEL,
+                        (G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class, PROP_NAME_MODEL_PREV,
+                                   properties [PROP_NAME_MODEL_PREV]);
+
   properties [PROP_NAME_MODEL] =
     g_param_spec_boxed ("name-model",
                         "NameModel",
-                        "Name model",
+                        "Name model on this row",
                         BUSTLE_TYPE_NAME_MODEL,
                         (G_PARAM_READWRITE |
                          G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (object_class, PROP_NAME_MODEL,
                                    properties [PROP_NAME_MODEL]);
+
+
+  properties [PROP_NAME_MODEL_NEXT] =
+    g_param_spec_boxed ("name-model-next",
+                        "NameModel",
+                        "Name model on the next visible row, or NULL if "
+                        "this is the last visible row",
+                        BUSTLE_TYPE_NAME_MODEL,
+                        (G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class, PROP_NAME_MODEL_NEXT,
+                                   properties [PROP_NAME_MODEL_NEXT]);
 }
 
 static void

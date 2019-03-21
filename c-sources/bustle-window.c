@@ -322,14 +322,31 @@ chart_data_func (GtkTreeViewColumn *tree_column,
 {
   g_autoptr(GDBusMessage) message = NULL;
   g_autoptr(BustleNameModel) name_model = NULL;
+  g_autoptr(BustleNameModel) name_model_prev = NULL;
+  g_autoptr(BustleNameModel) name_model_next = NULL;
+  GtkTreeIter sibling_iter;
 
   gtk_tree_model_get (tree_model, iter,
                       BUSTLE_MODEL_COLUMN_DBUS_MESSAGE, &message,
                       BUSTLE_MODEL_COLUMN_NAME_MODEL, &name_model,
                       -1);
+
+  sibling_iter = *iter;
+  if (gtk_tree_model_iter_previous (tree_model, &sibling_iter))
+    gtk_tree_model_get (tree_model, &sibling_iter,
+                        BUSTLE_MODEL_COLUMN_NAME_MODEL, &name_model_prev,
+                        -1);
+  sibling_iter = *iter;
+  if (gtk_tree_model_iter_next (tree_model, &sibling_iter))
+    gtk_tree_model_get (tree_model, &sibling_iter,
+                        BUSTLE_MODEL_COLUMN_NAME_MODEL, &name_model_next,
+                        -1);
+
   g_object_set (cell,
                 "dbus-message", message,
+                "name-model-prev", name_model_prev,
                 "name-model", name_model,
+                "name-model-next", name_model_next,
                 NULL);
 }
 
