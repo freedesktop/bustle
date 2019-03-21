@@ -3,6 +3,7 @@
 
 #define LINE_WIDTH 2
 #define LANE_WIDTH 24
+#define SIGNAL_RADIUS 4
 
 typedef struct
 {
@@ -153,11 +154,11 @@ bustle_cell_renderer_chart_get_size (GtkCellRenderer    *cell,
 }
 
 static inline void
-bustle_cell_render_chart_get_lane_centre (const GdkRectangle *cell_area,
-                                          const GdkRectangle *background_area,
-                                          guint               lane,
-                                          double             *x,
-                                          double             *y)
+bustle_cell_renderer_chart_get_lane_centre (const GdkRectangle *cell_area,
+                                            const GdkRectangle *background_area,
+                                            guint               lane,
+                                            double             *x,
+                                            double             *y)
 {
   g_assert (x != NULL);
   *x = cell_area->x + (lane * LANE_WIDTH) + (LANE_WIDTH / 2);
@@ -170,20 +171,22 @@ static void
 bustle_cell_renderer_chart_draw_arrow (cairo_t            *cr,
                                        const GdkRectangle *cell_area,
                                        const GdkRectangle *background_area,
-                                       guint32             from_lane,
-                                       guint32             to_lane,
+                                       double              from_x,
+                                       double              to_x,
+                                       double              y,
                                        GDBusMessageType    message_type)
 {
-  double from_x, to_x, y;
   static double return_dashes[] = { LINE_WIDTH };
   static double error_dashes[] = { LANE_WIDTH / 3, LINE_WIDTH };
-
-  bustle_cell_render_chart_get_lane_centre (cell_area, background_area, from_lane, &from_x, &y);
-  bustle_cell_render_chart_get_lane_centre (cell_area, background_area, to_lane, &to_x, NULL);
+  double direction = from_x < to_x ? -1. : 1.;
 
   cairo_save (cr);
 
-  cairo_move_to (cr, from_x, y);
+  if (message_type == G_DBUS_MESSAGE_TYPE_SIGNAL)
+    cairo_move_to (cr, from_x - (direction * SIGNAL_RADIUS), y);
+  else
+    cairo_move_to (cr, from_x, y);
+
   cairo_line_to (cr, to_x, y);
   cairo_set_line_width (cr, LINE_WIDTH);
   switch (message_type)
@@ -211,9 +214,9 @@ bustle_cell_renderer_chart_draw_arrow (cairo_t            *cr,
 
   double q = LANE_WIDTH / 4;
 
-  cairo_move_to (cr, from_lane < to_lane ? to_x - q : to_x + q, y - q);
+  cairo_move_to (cr, to_x + (direction * q), y - q);
   cairo_line_to (cr, to_x, y);
-  cairo_line_to (cr, from_lane < to_lane ? to_x - q : to_x + q, y + q);
+  cairo_line_to (cr, to_x + (direction * q), y + q);
   cairo_set_dash (cr, NULL, 0, 0);
   cairo_stroke (cr);
 
@@ -236,15 +239,22 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
   bustle_name_model_name_iter_init (self->name_model, &iter);
   while (bustle_name_model_name_iter_next (&iter, &name, &lane))
     {
-      gdouble x = cell_area->x + (LANE_WIDTH / 2) + (lane * LANE_WIDTH);
-      gdouble y1, y2;
+      gdouble x, y1, y2;
+
+      bustle_cell_renderer_chart_get_lane_centre (cell_area, background_area, lane, &x, NULL);
+
+      const Rgb *color = &palette[lane % PALETTE_SIZE];
+      cairo_set_line_width (cr, LINE_WIDTH);
+      cairo_set_source_rgb (cr, color->r / 255., color->g / 255., color->b / 255.);
 
       if (self->name_model_prev == NULL ||
           !bustle_name_model_has_unique_name (self->name_model_prev, name))
         {
           /* arriving */
-          y1 = background_area->y + background_area->height / 2;
-          /* TODO: draw a blob */
+          y1 = background_area->y + background_area->height * 1 / 4;
+          cairo_arc (cr, x, y1, LINE_WIDTH, 0., 2 * G_PI);
+          cairo_stroke_preserve (cr);
+          cairo_fill (cr);
         }
       else
         {
@@ -255,17 +265,16 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
           !bustle_name_model_has_unique_name (self->name_model_next, name))
         {
           /* leaving */
-          y2 = background_area->y + background_area->height / 2;
-          /* TODO: draw a blob */
+          y2 = background_area->y + background_area->height * 3 / 4;
+          cairo_arc (cr, x, y2, LINE_WIDTH, 0., 2 * G_PI);
+          cairo_stroke_preserve (cr);
+          cairo_fill (cr);
         }
       else
         {
           y2 = background_area->y + background_area->height;
         }
 
-      const Rgb *color = &palette[lane % PALETTE_SIZE];
-      cairo_set_line_width (cr, LINE_WIDTH);
-      cairo_set_source_rgb (cr, color->r / 255., color->g / 255., color->b / 255.);
       cairo_move_to (cr, x, y1);
       cairo_line_to (cr, x, y2);
       cairo_stroke (cr);
@@ -273,7 +282,9 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
 
   const gchar *sender = g_dbus_message_get_sender (self->message);
   const gchar *destination = g_dbus_message_get_destination (self->message);
+  GDBusMessageType message_type = g_dbus_message_get_message_type (self->message);
   guint32 from_lane, to_lane;
+  double from_x, from_y, to_x;
 
   if (sender != NULL)
     {
@@ -282,6 +293,21 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
           g_message ("%s: no lane for sender %s", G_STRFUNC, sender);
           return;
         }
+    }
+  else
+    {
+      /* Nothing better to do than make the message emerge from the æther. */
+      from_lane = bustle_name_model_get_first_unused_lane (self->name_model);
+    }
+
+  bustle_cell_renderer_chart_get_lane_centre (cell_area, background_area, from_lane, &from_x, &from_y);
+
+  if (message_type == G_DBUS_MESSAGE_TYPE_SIGNAL)
+    {
+      cairo_arc (cr, from_x, from_y, SIGNAL_RADIUS, 0., 2 * G_PI);
+      cairo_set_line_width (cr, LINE_WIDTH);
+      cairo_set_source_rgb (cr, 0, 0, 0);
+      cairo_stroke (cr);
     }
 
   if (destination != NULL)
@@ -292,13 +318,18 @@ bustle_cell_renderer_chart_render (GtkCellRenderer      *cell,
           to_lane = bustle_name_model_get_first_unused_lane (self->name_model);
         }
 
+      bustle_cell_renderer_chart_get_lane_centre (cell_area, background_area, to_lane, &to_x, NULL);
       bustle_cell_renderer_chart_draw_arrow (cr, cell_area, background_area,
-                                             from_lane, to_lane,
-                                             g_dbus_message_get_message_type (self->message));
+                                             from_x, to_x, from_y, message_type);
     }
   else
     {
-      /* TODO: draw a blob */
+      bustle_cell_renderer_chart_draw_arrow (cr, cell_area, background_area,
+                                             from_x, from_x - (LANE_WIDTH / 2),
+                                             from_y, message_type);
+      bustle_cell_renderer_chart_draw_arrow (cr, cell_area, background_area,
+                                             from_x, from_x + (LANE_WIDTH / 2),
+                                             from_y, message_type);
     }
 
   /* TODO: it's hard to draw an arc. We can probably work out how many rows
