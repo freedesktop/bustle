@@ -8,7 +8,7 @@ deps = [
   dependency('gio-2.0', version: glib_version),
   dependency('gio-unix-2.0', version: glib_version),
   dependency('gtk+-3.0'),
-  cc.find_library('libpcap'),
+  dependency('libpcap', version: '>= 1.9.0'),
 ]
 
 libbustle_pcap_sources = [
@@ -60,4 +60,3 @@ bustle_viewer = executable(
   dependencies: deps,
   install: true,
 )
-  
