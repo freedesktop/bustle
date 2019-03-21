@@ -31,13 +31,13 @@ bustle_pcap = executable(
   install: true,
 )
 
-bustle_viewer_resources = gnome.compile_resources(
+bustle_resources = gnome.compile_resources(
   'bustle-resources',
   'bustle.gresource.xml',
   c_name: 'bustle'
 )
 
-bustle_viewer_sources = [
+bustle_sources = [
   'bustle-cell-renderer-chart.c',
   'bustle-cell-renderer-chart.h',
   'bustle-model.c',
@@ -49,13 +49,12 @@ bustle_viewer_sources = [
   'bustle-viewer.c',
   'bustle-pcap-reader.c',
   'bustle-pcap-reader.h',
-  bustle_viewer_resources,
+  bustle_resources,
 ]
 
-
-bustle_viewer = executable(
-  'bustle-viewer',
-  bustle_viewer_sources,
+bustle = executable(
+  'bustle',
+  bustle_sources,
   link_with: [libbustle_pcap],
   dependencies: deps,
   install: true,
