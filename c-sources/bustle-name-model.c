@@ -48,13 +48,13 @@ struct _BustleNameModel
   /*< private >*/
   guint ref_count;
 
-  /* unique -> GHashTable-as-set<well_known> */
+  /* GRefString *unique -> GHashTable-as-set<GRefString *well_known> */
   GHashTable *owned_names;
 
-  /* well-known -> unique */
+  /* GRefString *well_known -> GRefString *unique */
   GHashTable *name_owners;
 
-  /* unique -> bustle_name_model_lane_pack (lane, state) */
+  /* GRefString *unique -> bustle_name_model_lane_pack (lane, state) */
   GHashTable *lanes;
 
   /* Next free lane */
@@ -76,23 +76,50 @@ bustle_name_model_new (void)
 
   self = g_slice_new0 (BustleNameModel);
   self->ref_count = 1;
-  /* TODO: either make the names GRefStrings, or intern them ourselves */
   self->owned_names = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                             NULL, (GDestroyNotify) g_hash_table_unref);
-  self->name_owners = g_hash_table_new (g_str_hash, g_str_equal);
-  self->lanes = g_hash_table_new (g_str_hash, g_str_equal);
+                                             (GDestroyNotify) g_ref_string_release,
+                                             (GDestroyNotify) g_hash_table_unref);
+  self->name_owners = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                             (GDestroyNotify) g_ref_string_release,
+                                             (GDestroyNotify) g_ref_string_release);
+  self->lanes = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                       (GDestroyNotify) g_ref_string_release,
+                                       NULL);
 
   return self;
 }
 
-/**
+static GHashTable *
+owned_names_value_copy (GHashTable *names)
+{
+  GHashTable *copy = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                            (GDestroyNotify) g_ref_string_release,
+                                            NULL);
+  if (names != NULL)
+    {
+      GHashTableIter iter;
+      gpointer key, value;
+
+      g_hash_table_iter_init (&iter, copy);
+      while (g_hash_table_iter_next (&iter, &key, &value))
+        {
+          g_assert (key == value);
+          key = g_ref_string_acquire (key);
+          g_assert (key == value);
+          g_hash_table_insert (copy, key, value);
+        }
+    }
+
+  return copy;
+}
+
+/*
  * bustle_name_model_copy:
  * @self: (inout) (transfer full): a #BustleNameModel
  *
- * Makes a deep copy of @self, consuming that reference. (If that was the last
- * reference, no copy is made.)
- *
- * TODO: fix docs
+ * Makes a deep copy of the model pointed to by @self, consuming that reference,
+ * then assigns the copy back to @self. (As an optimization, if @self holds the
+ * last reference, no copy is made.)
  */
 static void
 bustle_name_model_copy (BustleNameModel **self)
@@ -114,18 +141,25 @@ bustle_name_model_copy (BustleNameModel **self)
   GHashTableIter iter;
   gpointer key, value;
 
-  /* TODO: do this more lazily? */
+  /* TODO: copying the values eagerly costs us a lot of GHashTables, most of
+   * which are unmodified between rows. Copy the outer table, but defer copying
+   * the values (more GHashTables) unless/until they are mutated.
+   */
   g_hash_table_iter_init (&iter, (*self)->owned_names);
   while (g_hash_table_iter_next (&iter, &key, &value))
-    g_hash_table_insert (copy->owned_names, key, g_hash_table_ref (value));
+    g_hash_table_insert (copy->owned_names,
+                         g_ref_string_acquire (key),
+                         owned_names_value_copy (value));
 
   g_hash_table_iter_init (&iter, (*self)->name_owners);
   while (g_hash_table_iter_next (&iter, &key, &value))
-    g_hash_table_insert (copy->name_owners, key, value);
+    g_hash_table_insert (copy->name_owners,
+                         g_ref_string_acquire (key),
+                         g_ref_string_acquire (value));
 
   g_hash_table_iter_init (&iter, (*self)->lanes);
   while (g_hash_table_iter_next (&iter, &key, &value))
-    g_hash_table_insert (copy->lanes, key, value);
+    g_hash_table_insert (copy->lanes, g_ref_string_acquire (key), value);
 
   copy->next_lane = (*self)->next_lane;
 
@@ -210,22 +244,35 @@ bustle_name_model_assign_lane (BustleNameModel **self,
 
       g_assert ((*self)->next_lane < MAX_LANE);
       g_hash_table_insert ((*self)->lanes,
-                           (gpointer) owner,
+                           g_ref_string_new_intern (owner),
                            bustle_name_model_lane_pack ((*self)->next_lane++,
                                                         BUSTLE_NAME_MODEL_LANE_STATE_CURRENT));
     }
 }
 
-static void
-bustle_name_model_add_unique (BustleNameModel **self,
-                              const gchar      *name)
+static GHashTable *
+bustle_name_model_ensure_unique (BustleNameModel **self,
+                                 const gchar      *name)
 {
-  if (!g_hash_table_contains ((*self)->owned_names, name))
+  GHashTable *names;
+  gpointer key, value;
+
+  if (g_hash_table_lookup_extended ((*self)->owned_names, name,
+                                    &key, &value))
     {
-      bustle_name_model_copy (self);
-      g_hash_table_insert ((*self)->owned_names, (gpointer) name,
-                           g_hash_table_new (g_str_hash, g_str_equal));
+      names = value;
     }
+  else
+    {
+      names = owned_names_value_copy (NULL);
+
+      bustle_name_model_copy (self);
+      g_hash_table_insert ((*self)->owned_names,
+                           g_ref_string_new_intern (name),
+                           names);
+    }
+
+  return names;
 }
 
 static void
@@ -248,7 +295,8 @@ bustle_name_model_del_unique (BustleNameModel **self,
       guint lane;
 
       bustle_name_model_lane_unpack (value, &lane, NULL);
-      g_hash_table_replace ((*self)->lanes, key,
+      g_hash_table_replace ((*self)->lanes,
+                            g_ref_string_acquire (key),
                             bustle_name_model_lane_pack (lane,
                                                          BUSTLE_NAME_MODEL_LANE_STATE_CLOSING));
       /* It will be removed when the next message is processed */
@@ -263,17 +311,14 @@ bustle_name_model_add_owner (BustleNameModel **self,
   bustle_name_model_copy (self);
 
   /* Map from name to its owner */
-  g_hash_table_insert ((*self)->name_owners, (gpointer) name, (gpointer) unique);
+  g_hash_table_insert ((*self)->name_owners,
+                       g_ref_string_new_intern (name),
+                       g_ref_string_new_intern (unique));
 
   /* Map from its owner to name */
-  GHashTable *names = g_hash_table_lookup ((*self)->owned_names, unique);
-  if (names == NULL)
-    {
-      bustle_name_model_add_unique (self, unique);
-      names = g_hash_table_lookup ((*self)->owned_names, unique);
-      g_assert (names != NULL);
-    }
-  g_hash_table_insert (names, (gpointer) name, (gpointer) name);
+  GHashTable *names = bustle_name_model_ensure_unique (self, unique);
+  gchar *name_ref = g_ref_string_new_intern (name);
+  g_hash_table_insert (names, name_ref, name_ref);
 }
 
 static void
@@ -318,7 +363,7 @@ bustle_name_model_update_for_name_owner_changed (BustleNameModel **self,
           g_return_if_fail (new[0] != '\0');
           g_return_if_fail (g_strcmp0 (name, new) == 0);
 
-          bustle_name_model_add_unique (self, name);
+          bustle_name_model_ensure_unique (self, name);
         }
     }
   else
@@ -448,10 +493,9 @@ bustle_name_model_update (BustleNameModel **self,
     {
       bustle_name_model_update_for_bus_reply (self, message, counterpart);
     }
-  else if (sender != NULL &&
-           !g_hash_table_contains ((*self)->owned_names, sender))
+  else if (sender != NULL)
     {
-      bustle_name_model_add_unique (self, sender);
+      bustle_name_model_ensure_unique (self, sender);
     }
   /* and what about the destination? */
 
