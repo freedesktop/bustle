@@ -1,32 +1,9 @@
 stages:
-  - lint
   - build
-
-variables:
-  ZENHASKELL_IMAGE: "zenhaskell/gtk:lts-12.20"
-
-lint:
-  stage: lint
-  image: ${ZENHASKELL_IMAGE}
-  script:
-  - hlint .
-
-stack-build-test:
-  stage: build
-  image: ${ZENHASKELL_IMAGE}
-  before_script:
-    - apt install -y libpcap-dev
-  script:
-    - stack build
-    - stack test
-  cache:
-    key: "stack-work"
-    paths:
-      - .stack-work
 
 flatpak-build:
   stage: build
-  image: registry.gitlab.gnome.org/gnome/gnome-runtime-images/gnome:3.28
+  image: registry.gitlab.gnome.org/gnome/gnome-runtime-images/gnome:3.32
   only:
     refs:
     - master
@@ -40,7 +17,7 @@ flatpak-build:
     RUNTIME_REPO: "https://flathub.org/repo/flathub.flatpakrepo"
 
   script:
-    - flatpak-builder --repo ${REPO} app flatpak/${APP_ID}.yaml
+    - flatpak-builder --repo ${REPO} app ${APP_ID}.json
     - flatpak build-bundle --runtime-repo=${RUNTIME_REPO} ${REPO} ${BUNDLE} ${APP_ID}
 
   artifacts:

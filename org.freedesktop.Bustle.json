@@ -1,0 +1,60 @@
+{
+    "app-id": "org.freedesktop.Bustle",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "3.32",
+    "sdk": "org.gnome.Sdk",
+    "command": "bustle",
+    "finish-args": [
+        "--socket=x11",
+        "--socket=wayland",
+        "--socket=system-bus",
+        "--socket=session-bus",
+        "--share=ipc",
+        "--filesystem=xdg-run/dconf",
+        "--filesystem=~/.config/dconf:ro",
+        "--talk-name=ca.desrt.dconf",
+        "--env=DCONF_USER_CONFIG_DIR=.config/dconf",
+        "--filesystem=host"
+    ],
+    "cleanup": [
+        "*.a",
+        "*.h",
+        "/share/man/man?/pcap*",
+        "/bin/pcap-config"
+    ],
+    "modules": [
+        {
+            "name": "libpcap",
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://www.tcpdump.org/release/libpcap-1.9.0.tar.gz",
+                    "sha256": "2edb88808e5913fdaa8e9c1fcaf272e19b2485338742b5074b9fe44d68f37019"
+                }
+            ]
+        },
+        {
+            "name": "help2man",
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://ftpmirror.gnu.org/help2man/help2man-1.47.4.tar.xz",
+                    "sha256": "d4ecf697d13f14dd1a78c5995f06459bff706fd1ce593d1c02d81667c0207753"
+                }
+            ],
+            "cleanup": [
+                "*"
+            ]
+        },
+        {
+            "name": "bustle",
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": "."
+                }
+            ],
+            "buildsystem": "meson"
+        }
+    ]
+}
