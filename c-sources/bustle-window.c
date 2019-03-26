@@ -16,6 +16,10 @@ struct _BustleWindow
   GtkStack *diagramOrNot;
   GtkScrolledWindow *diagramScrolledWindow;
 
+  GtkInfoBar *errorBar;
+  GtkLabel *errorBarTitle;
+  GtkLabel *errorBarDetails;
+
   /* Details stuff */
   /* TODO: move to separate widget */
   GtkGrid *detailsGrid;
@@ -34,6 +38,9 @@ struct _BustleWindow
 
 G_DEFINE_TYPE (BustleWindow, bustle_window, GTK_TYPE_APPLICATION_WINDOW)
 
+static void bustle_window_show_error (BustleWindow *self,
+                                      const gchar  *title,
+                                      const GError *error);
 static gboolean bustle_window_load_file (BustleWindow  *self,
                                          GError       **error);
 
@@ -58,6 +65,14 @@ bustle_window_new (GtkApplication *application,
 }
 
 static void
+error_bar_response_cb (GtkInfoBar *info_bar,
+                       gint        response_id,
+                       gpointer    user_data)
+{
+  gtk_widget_hide (GTK_WIDGET (info_bar));
+}
+
+static void
 bustle_window_constructed (GObject *object)
 {
   BustleWindow *self = (BustleWindow *)object;
@@ -67,9 +82,18 @@ bustle_window_constructed (GObject *object)
 
   gtk_widget_show (GTK_WIDGET (self));
 
+  g_signal_connect_object (self->errorBar, "response",
+                           G_CALLBACK (error_bar_response_cb), self,
+                           0);
+
   g_assert (self->file != NULL);
   if (!bustle_window_load_file (self, &error))
-    g_error ("%s: %s", G_STRFUNC, error->message);
+    {
+      g_autofree gchar *title = g_strdup_printf (_("Could not read ‘%s’."),
+                                                 g_file_peek_path (self->file));
+
+      bustle_window_show_error (self, title, error);
+    }
 }
 
 static void
@@ -148,6 +172,10 @@ bustle_window_class_init (BustleWindowClass *klass)
                                                "/org/freedesktop/Bustle/bustle-window.ui");
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, diagramOrNot);
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, diagramScrolledWindow);
+
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, errorBar);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, errorBarTitle);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, errorBarDetails);
 
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, detailsGrid);
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, detailsType);
@@ -564,4 +592,26 @@ bustle_window_load_file (BustleWindow  *self,
     }
 
   return FALSE;
+}
+
+static void
+bustle_window_show_error (BustleWindow *self,
+                          const gchar  *title,
+                          const GError *error)
+{
+  g_assert (BUSTLE_IS_WINDOW (self));
+  g_assert (title != NULL);
+  g_assert (error == NULL || error->message != NULL);
+
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    return;
+
+  g_autofree gchar *title_markup = g_markup_printf_escaped ("<b>%s</b>", title);
+  gtk_label_set_markup (self->errorBarTitle, title_markup);
+
+  gtk_widget_set_visible (GTK_WIDGET (self->errorBarDetails), error != NULL);
+  gtk_label_set_text (self->errorBarDetails, error != NULL ? error->message : "");
+
+  /* TODO: use :revealed, modulo https://gitlab.gnome.org/GNOME/gtk/issues/1165 */
+  gtk_widget_show (GTK_WIDGET (self->errorBar));
 }

@@ -123,8 +123,7 @@ bustle_pcap_reader_initable_init (GInitable     *initable,
   self->savefile = pcap_open_offline (self->path, errbuf);
   if (self->savefile == NULL)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Could not open %s: %s", self->path, errbuf);
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, errbuf);
       return FALSE;
     }
 
@@ -132,10 +131,8 @@ bustle_pcap_reader_initable_init (GInitable     *initable,
   if (dlt != DLT_DBUS)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA,
-                   "%s has unexpected link type %s (%d)",
-                   self->path,
-                   pcap_datalink_val_to_name (dlt),
-                   dlt);
+                   "Unexpected link type %s (%d)",
+                   pcap_datalink_val_to_name (dlt), dlt);
       return FALSE;
     }
 
@@ -181,10 +178,8 @@ bustle_pcap_reader_next (BustlePcapReader  *self,
 
     case -1:
       /* error */
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Reading message from %s failed: %s",
-                   self->path,
-                   pcap_geterr (self->savefile));
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           pcap_geterr (self->savefile));
       return FALSE;
 
     default:
@@ -196,11 +191,7 @@ bustle_pcap_reader_next (BustlePcapReader  *self,
                                                G_DBUS_CAPABILITY_FLAGS_UNIX_FD_PASSING,
                                                error);
   if (*message_out == NULL)
-    {
-      g_prefix_error (error, "Deserializing message from %s failed: ",
-                      self->path);
-      return FALSE;
-    }
+    return FALSE;
 
   *timestamp_out = G_USEC_PER_SEC * pkt_header->ts.tv_sec + pkt_header->ts.tv_usec;
   return TRUE;
