@@ -904,6 +904,7 @@ spawn_monitor (BustlePcapMonitor *self,
 {
   g_autoptr(GSubprocessLauncher) launcher =
     g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_PIPE);
+  g_subprocess_launcher_unsetenv (launcher, "G_MESSAGES_DEBUG");
 
   self->pt_master = posix_openpt (O_RDWR | O_NOCTTY | O_CLOEXEC);
   if (self->pt_master < 0)
