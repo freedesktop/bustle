@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/org/freedesktop/Bustle">
     <file preprocess="xml-stripblanks">bustle-window.ui</file>
+    <file preprocess="xml-stripblanks">bustle-record-address-dialog.ui</file>
   </gresource>
 </gresources>
 

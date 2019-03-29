@@ -8,7 +8,8 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (BustleWindow, bustle_window, BUSTLE, WINDOW, GtkApplicationWindow)
 
-BustleWindow *bustle_window_new (GtkApplication *application,
-                                 GFile *file);
+BustleWindow *bustle_window_new       (GtkApplication *application);
+void          bustle_window_load_file (BustleWindow   *self,
+                                       GFile          *file);
 
 G_END_DECLS

@@ -6,19 +6,40 @@
 #include "bustle-model.h"
 #include "bustle-name-model.h"
 #include "bustle-pcap-reader.h"
+#include "bustle-record-address-dialog.h"
+#include "pcap-monitor.h"
 
 struct _BustleWindow
 {
   GtkApplicationWindow parent_instance;
 
   GFile *file;
+  BustlePcapMonitor *monitor;
+
+  BustleModel *model;
+  guint messages_logged;
+  /* Timestamp of the first message in @model, or 0 if it is empty. */
+  gint64 first_ts;
 
   GtkStack *diagramOrNot;
   GtkScrolledWindow *diagramScrolledWindow;
 
+  /* Error stuff */
   GtkInfoBar *errorBar;
   GtkLabel *errorBarTitle;
   GtkLabel *errorBarDetails;
+
+  /* Menu stuff */
+  GtkMenuButton *headerRecord;
+  GtkMenuButton *headerStop;
+  /* TODO: move to actions */
+  GtkMenuItem *recordSession;
+  GtkMenuItem *recordSystem;
+  GtkMenuItem *recordAddress;
+
+  GtkSpinner *headerSpinner;
+  GtkLabel *headerTitle;
+  GtkLabel *headerSubtitle;
 
   /* Details stuff */
   /* TODO: move to separate widget */
@@ -38,11 +59,15 @@ struct _BustleWindow
 
 G_DEFINE_TYPE (BustleWindow, bustle_window, GTK_TYPE_APPLICATION_WINDOW)
 
+static void bustle_window_show_model (BustleWindow *self);
 static void bustle_window_show_error (BustleWindow *self,
                                       const gchar  *title,
                                       const GError *error);
-static gboolean bustle_window_load_file (BustleWindow  *self,
-                                         GError       **error);
+
+static void record_cb (GtkMenuItem *item,
+                       gpointer     user_data);
+static void stop_cb   (GtkButton   *item,
+                       gpointer     user_data);
 
 typedef enum {
   PROP_FILE = 1,
@@ -52,15 +77,12 @@ typedef enum {
 static GParamSpec *properties [N_PROPS];
 
 BustleWindow *
-bustle_window_new (GtkApplication *application,
-                   GFile *file)
+bustle_window_new (GtkApplication *application)
 {
   g_return_val_if_fail (GTK_IS_APPLICATION (application), NULL);
-  g_return_val_if_fail (file == NULL || G_IS_FILE (file), NULL);
 
   return g_object_new (BUSTLE_TYPE_WINDOW,
                        "application", application,
-                       "file", file,
                        NULL);
 }
 
@@ -76,24 +98,22 @@ static void
 bustle_window_constructed (GObject *object)
 {
   BustleWindow *self = (BustleWindow *)object;
-  g_autoptr(GError) error = NULL;
 
   G_OBJECT_CLASS (bustle_window_parent_class)->constructed (object);
 
-  gtk_widget_show (GTK_WIDGET (self));
+  self->model = bustle_model_new ();
+  bustle_window_show_model (self);
 
   g_signal_connect_object (self->errorBar, "response",
                            G_CALLBACK (error_bar_response_cb), self,
                            0);
 
-  g_assert (self->file != NULL);
-  if (!bustle_window_load_file (self, &error))
-    {
-      g_autofree gchar *title = g_strdup_printf (_("Could not read ‘%s’."),
-                                                 g_file_peek_path (self->file));
+  g_signal_connect (self->recordSession, "activate", G_CALLBACK (record_cb), self);
+  g_signal_connect (self->recordSystem, "activate", G_CALLBACK (record_cb), self);
+  g_signal_connect (self->recordAddress, "activate", G_CALLBACK (record_cb), self);
+  g_signal_connect (self->headerStop, "clicked", G_CALLBACK (stop_cb), self);
 
-      bustle_window_show_error (self, title, error);
-    }
+  gtk_widget_show (GTK_WIDGET (self));
 }
 
 static void
@@ -102,6 +122,8 @@ bustle_window_finalize (GObject *object)
   BustleWindow *self = (BustleWindow *)object;
 
   g_clear_object (&self->file);
+  g_clear_object (&self->monitor);
+  g_clear_object (&self->model);
 
   G_OBJECT_CLASS (bustle_window_parent_class)->finalize (object);
 }
@@ -162,8 +184,7 @@ bustle_window_class_init (BustleWindowClass *klass)
                          "File",
                          "File",
                          G_TYPE_FILE,
-                         (G_PARAM_CONSTRUCT_ONLY |
-                          G_PARAM_READWRITE |
+                         (G_PARAM_READABLE |
                           G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (object_class, PROP_FILE,
                                    properties [PROP_FILE]);
@@ -176,6 +197,16 @@ bustle_window_class_init (BustleWindowClass *klass)
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, errorBar);
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, errorBarTitle);
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, errorBarDetails);
+
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, headerRecord);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, headerStop);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, recordSession);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, recordSystem);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, recordAddress);
+
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, headerSpinner);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, headerTitle);
+  gtk_widget_class_bind_template_child (widget_class, BustleWindow, headerSubtitle);
 
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, detailsGrid);
   gtk_widget_class_bind_template_child (widget_class, BustleWindow, detailsType);
@@ -204,14 +235,14 @@ timestamp_data_func (GtkTreeViewColumn *tree_column,
                      GtkTreeIter       *iter,
                      gpointer           data)
 {
-  gint64 *first_ts = data;
+  BustleWindow *self = BUSTLE_WINDOW (data);
   gint64 timestamp_usec;
   g_autofree gchar *text = NULL;
 
   gtk_tree_model_get (tree_model, iter,
                       BUSTLE_MODEL_COLUMN_TIMESTAMP_USEC, &timestamp_usec,
                       -1);
-  text = g_strdup_printf ("%.3fs", (double) (timestamp_usec - *first_ts) / G_USEC_PER_SEC);
+  text = g_strdup_printf ("+%.3fs", (double) (timestamp_usec - self->first_ts) / G_USEC_PER_SEC);
   g_object_set (cell, "text", text, NULL);
 }
 
@@ -494,16 +525,12 @@ selection_changed_cb (GtkTreeSelection *selection,
 }
 
 static void
-bustle_window_show_model (BustleWindow *self,
-                          GtkTreeModel *model)
+bustle_window_show_model (BustleWindow *self)
 {
-  g_autoptr(GtkTreePath) path = gtk_tree_path_new_from_string ("0");
-  GtkTreeIter iter;
-  gint64 *first_ts = g_new (gint64, 1);
+  /*
+   */
 
-  gtk_tree_model_get_iter (model, &iter, path);
-  gtk_tree_model_get (model, &iter, BUSTLE_MODEL_COLUMN_TIMESTAMP_USEC, first_ts, -1);
-
+  GtkTreeModel *model = bustle_model_get_tree_model (self->model);
   GtkWidget *tree_view = gtk_tree_view_new_with_model (model);
   GtkCellRenderer *renderer;
   GtkTreeViewColumn *column;
@@ -519,7 +546,7 @@ bustle_window_show_model (BustleWindow *self,
   column = gtk_tree_view_column_new_with_attributes ("Timestamp", renderer, NULL);
   gtk_tree_view_column_set_cell_data_func (column, renderer,
                                            timestamp_data_func,
-                                           g_steal_pointer (&first_ts), g_free);
+                                           self, NULL);
   gtk_tree_view_append_column (GTK_TREE_VIEW (tree_view), column);
 
   renderer = gtk_cell_renderer_text_new ();
@@ -559,13 +586,26 @@ bustle_window_show_model (BustleWindow *self,
   selection_changed_cb (selection, self);
 
   gtk_container_add (GTK_CONTAINER (self->diagramScrolledWindow), tree_view);
-  gtk_stack_set_visible_child_name (self->diagramOrNot, "CanvasPage");
   gtk_widget_show (tree_view);
 }
 
+static void
+bustle_window_add_message (BustleWindow *self,
+                           gint64        ts,
+                           GDBusMessage *message)
+{
+  if (self->first_ts == 0)
+    {
+      self->first_ts = ts;
+      gtk_stack_set_visible_child_name (self->diagramOrNot, "CanvasPage");
+    }
+
+  bustle_model_add_message (self->model, ts, message);
+}
+
 static gboolean
-bustle_window_load_file (BustleWindow  *self,
-                         GError       **error)
+bustle_window_do_load_file (BustleWindow  *self,
+                            GError       **error)
 {
   g_assert (self->file != NULL);
 
@@ -573,8 +613,6 @@ bustle_window_load_file (BustleWindow  *self,
   g_autoptr(BustlePcapReader) reader = bustle_pcap_reader_new (path, error);
   if (reader == NULL)
     return FALSE;
-
-  g_autoptr(BustleModel) model = bustle_model_new ();
 
   gint64 ts;
   g_autoptr(GDBusMessage) message = NULL;
@@ -584,11 +622,10 @@ bustle_window_load_file (BustleWindow  *self,
       if (message == NULL)
         {
           /* EOF */
-          bustle_window_show_model (self, bustle_model_get_tree_model (model));
           return TRUE;
         }
 
-      bustle_model_add_message (model, ts, message);
+      bustle_window_add_message (self, ts, message);
     }
 
   return FALSE;
@@ -614,4 +651,228 @@ bustle_window_show_error (BustleWindow *self,
 
   /* TODO: use :revealed, modulo https://gitlab.gnome.org/GNOME/gtk/issues/1165 */
   gtk_widget_show (GTK_WIDGET (self->errorBar));
+}
+
+void
+bustle_window_load_file (BustleWindow *self,
+                         GFile        *file)
+{
+  g_return_if_fail (BUSTLE_IS_WINDOW (self));
+  g_return_if_fail (G_IS_FILE (file));
+
+  g_return_if_fail (self->file == NULL);
+  self->file = g_object_ref (file);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_FILE]);
+
+  g_autoptr(GError) local_error = NULL;
+
+  if (!bustle_window_do_load_file (self, &local_error))
+    {
+      g_autofree gchar *title = g_strdup_printf (_("Could not read ‘%s’."),
+                                                 g_file_peek_path (self->file));
+      bustle_window_show_error (self, title, local_error);
+    }
+}
+
+static void
+message_logged_cb (BustlePcapMonitor *monitor,
+                   long               timestamp_sec,
+                   long               timestamp_usec,
+                   const guint8      *blob,
+                   gsize              len,
+                   gpointer           user_data)
+{
+  BustleWindow *self = BUSTLE_WINDOW (user_data);
+  gint64 timestamp = G_USEC_PER_SEC * timestamp_sec + timestamp_usec;
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(GDBusMessage) message = NULL;
+
+  message = g_dbus_message_new_from_blob ((guchar *) blob, len,
+                                          G_DBUS_CAPABILITY_FLAGS_UNIX_FD_PASSING,
+                                          &local_error);
+  if (message == NULL)
+    {
+      bustle_window_show_error (self,
+                                _("Could not decode recorded message."),
+                                local_error);
+      bustle_pcap_monitor_stop (self->monitor);
+    }
+  else
+    {
+      bustle_window_add_message (self, timestamp, message);
+      self->messages_logged++;
+
+      g_autofree gchar *subtitle = g_strdup_printf (_("%u messages"),
+                                                    self->messages_logged);
+      gtk_label_set_text (self->headerSubtitle, subtitle);
+    }
+}
+
+static void
+stopped_cb (BustlePcapMonitor *monitor,
+            guint              domain,
+            gint               code,
+            const gchar       *message,
+            gpointer           user_data)
+{
+  BustleWindow *self = BUSTLE_WINDOW (user_data);
+  g_assert (domain != 0);
+  g_assert (domain <= G_MAXUINT32);
+  g_autoptr(GError) local_error = g_error_new_literal ((GQuark) domain, code, message);
+
+  gtk_spinner_stop (self->headerSpinner);
+  gtk_widget_show (GTK_WIDGET (self->headerRecord));
+  gtk_widget_hide (GTK_WIDGET (self->headerStop));
+  if (self->first_ts == 0)
+    {
+      gtk_stack_set_visible_child_name (self->diagramOrNot, "InstructionsPage");
+      g_clear_object (&self->file);
+    }
+
+  if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    bustle_window_show_error (self,
+                              _("Recording failed."),
+                              local_error);
+
+  g_signal_handlers_disconnect_by_data (self->monitor, self);
+  g_clear_object (&self->monitor);
+}
+
+static void
+bustle_window_start_recording (BustleWindow *self,
+                               GBusType      bus_type,
+                               const gchar  *address)
+{
+  g_assert (BUSTLE_IS_WINDOW (self));
+  g_assert ((bus_type == G_BUS_TYPE_NONE) == (address != NULL));
+  g_assert (self->file == NULL);
+  g_assert (self->monitor == NULL);
+
+  g_autoptr(GDateTime) now = g_date_time_new_now_local ();
+  g_autofree gchar *basename = g_date_time_format (now,
+                                                   "%F %H-%M-%S.pcap");
+  g_autofree gchar *target_path = g_build_filename (g_get_user_cache_dir (),
+                                                    "bustle",
+                                                    basename,
+                                                    NULL);
+  g_autoptr(GFile) target_file = g_file_new_for_path (target_path);
+  g_autoptr(GFile) target_dir = g_file_get_parent (target_file);
+  g_autoptr(GError) local_error = NULL;
+
+  if (!g_file_make_directory_with_parents (target_dir, NULL, &local_error) &&
+      !g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
+    {
+      bustle_window_show_error (self,
+                                _("Could not start recording."),
+                                local_error);
+      return;
+    }
+
+  g_clear_error (&local_error);
+  self->monitor = bustle_pcap_monitor_new (bus_type, address, target_path,
+                                           &local_error);
+  if (self->monitor == NULL)
+    {
+      bustle_window_show_error (self,
+                                _("Could not start recording."),
+                                local_error);
+    }
+  else
+    {
+      g_autofree gchar *title_to_free = NULL;
+      const gchar *title = NULL;
+      switch (bus_type)
+        {
+        case G_BUS_TYPE_SESSION:
+          title = _("Recording session bus…");
+          break;
+        case G_BUS_TYPE_SYSTEM:
+          title = _("Recording system bus…");
+          break;
+        case G_BUS_TYPE_NONE:
+          title_to_free = g_strdup_printf (_("Recording %s…"), address);
+          title = title_to_free;
+          break;
+        default:
+          g_assert_not_reached ();
+        }
+
+      g_set_object (&self->file, target_file);
+
+      gtk_stack_set_visible_child_name (self->diagramOrNot, "PleaseHoldPage");
+
+      gtk_spinner_start (self->headerSpinner);
+      gtk_label_set_text (self->headerTitle, title);
+
+      gtk_widget_hide (GTK_WIDGET (self->headerRecord));
+      gtk_widget_show (GTK_WIDGET (self->headerStop));
+
+      g_signal_connect_object (self->monitor, "message-logged",
+                               G_CALLBACK (message_logged_cb), self, 0);
+      g_signal_connect_object (self->monitor, "stopped",
+                               G_CALLBACK (stopped_cb), self, 0);
+    }
+}
+
+static void
+bustle_window_start_recording_somewhere (BustleWindow *self,
+                                         GBusType      bus_type,
+                                         const gchar  *address)
+{
+  BustleWindow *target;
+
+  if (self->first_ts != 0)
+    target = bustle_window_new (gtk_window_get_application (GTK_WINDOW (self)));
+  else
+    target = self;
+
+  bustle_window_start_recording (target, bus_type, address);
+}
+
+static void
+record_address_cb (GObject      *source,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  g_autoptr(BustleWindow) self = BUSTLE_WINDOW (user_data);
+  g_autoptr(GError) local_error = NULL;
+  g_autofree gchar *address = NULL;
+
+  address = bustle_record_address_dialog_run_finish (BUSTLE_RECORD_ADDRESS_DIALOG (source),
+                                                     result,
+                                                     &local_error);
+  if (address != NULL)
+    bustle_window_start_recording_somewhere (self, G_BUS_TYPE_NONE, address);
+  else if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    g_warning ("%s", local_error->message);
+}
+
+static void
+record_cb (GtkMenuItem *item,
+           gpointer     user_data)
+{
+  BustleWindow *self = BUSTLE_WINDOW (user_data);
+
+  if (self->recordSession == item)
+    bustle_window_start_recording_somewhere (self, G_BUS_TYPE_SESSION, NULL);
+  else if (self->recordSystem == item)
+    bustle_window_start_recording_somewhere (self, G_BUS_TYPE_SYSTEM, NULL);
+  else if (self->recordAddress == item)
+    {
+      BustleRecordAddressDialog *d = bustle_record_address_dialog_new (GTK_WINDOW (self));
+      bustle_record_address_dialog_run_async (d, NULL, record_address_cb, g_object_ref (self));
+    }
+  else
+    g_assert_not_reached ();
+}
+
+static void
+stop_cb (GtkButton *item,
+         gpointer   user_data)
+{
+  BustleWindow *self = BUSTLE_WINDOW (user_data);
+
+  g_assert (self->monitor != NULL);
+
+  bustle_pcap_monitor_stop (self->monitor);
 }

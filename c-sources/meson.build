@@ -49,6 +49,8 @@ bustle_sources = [
   'bustle-viewer.c',
   'bustle-pcap-reader.c',
   'bustle-pcap-reader.h',
+  'bustle-record-address-dialog.c',
+  'bustle-record-address-dialog.h',
   bustle_resources,
 ]
 

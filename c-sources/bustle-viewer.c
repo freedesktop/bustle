@@ -11,7 +11,8 @@ open_cb (GApplication *application,
 {
   for (int i = 0; i < n_files; i++)
     {
-      bustle_window_new (GTK_APPLICATION (application), files[i]);
+      BustleWindow *window = bustle_window_new (GTK_APPLICATION (application));
+      bustle_window_load_file (window, files[i]);
     }
 }
 
@@ -19,9 +20,7 @@ static void
 activate_cb (GApplication *application,
              gpointer user_data)
 {
-  g_autoptr(GFile) file = g_file_new_for_path ("/home/wjt/src/bustle/oh-no.pcap");
-
-  bustle_window_new (GTK_APPLICATION (application), file);
+  bustle_window_new (GTK_APPLICATION (application));
 }
 
 gint
