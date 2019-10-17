@@ -69,7 +69,7 @@ Source-Repository head
 
 Flag hgettext
   Description:    Enable translations. Since there are no translations this is currently rather pointless.
-  Default:        True
+  Default:        False
 
 Flag InteractiveTests
   Description:    Build interactive test programs
