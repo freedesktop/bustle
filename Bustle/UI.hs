@@ -487,7 +487,8 @@ emptyWindow = do
   subtitle <- getW castToLabel "headerSubtitle"
   spinner  <- getW castToSpinner "headerSpinner"
 
-  [openItem, openTwoItem] <- mapM (getW castToMenuItem) ["open", "openTwo"]
+  openItem <- getW castToMenuItem "open"
+  openTwoItem <- getW castToMenuItem "openTwo"
   recordSessionItem <- getW castToMenuItem "recordSession"
   recordSystemItem <- getW castToMenuItem "recordSystem"
   recordAddressItem <- getW castToMenuItem "recordAddress"

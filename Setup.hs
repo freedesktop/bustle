@@ -1,4 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wall #-}
+
+#if defined(VERSION_hgettext)
+
 import System.FilePath ( (</>), (<.>) )
 
 import Distribution.PackageDescription
@@ -92,3 +96,12 @@ generateModule pkg lbi =
     tar = GetText.targetDataDir lbi
 
 -- Cargo-culted from hgettext
+
+#else
+
+import Distribution.Simple
+
+main :: IO ()
+main = defaultMain
+
+#endif
