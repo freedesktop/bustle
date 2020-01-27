@@ -5,7 +5,7 @@ Cabal-Version:  2.0
 Tested-With:    GHC == 8.4.3
 Synopsis:       Draw sequence diagrams of D-Bus traffic
 Description:    Bustle records and draws sequence diagrams of D-Bus activity, showing signal emissions, method calls and their corresponding returns, with timestamps for each individual event and the duration of each method call. This can help you check for unwanted D-Bus traffic, and pinpoint why your D-Bus-based application isn't performing as well as you like.  It also provides statistics like signal frequencies and average method call times.
-License:        OtherLicense
+License:        LGPL-2.1-or-later
 License-file:   LICENSE
 Author:         Will Thompson <will@willthompson.co.uk>
 Maintainer:     Will Thompson <will@willthompson.co.uk>
