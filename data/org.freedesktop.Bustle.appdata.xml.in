@@ -19,7 +19,7 @@
 		    like. It also provides statistics like signal frequencies
 		    and average method call times.</p>
 	</description>
-	<project_license>LGPL-2.1+ AND GPL-3.0</project_license>
+	<project_license>LGPL-2.1+</project_license>
 	<screenshots>
 		<screenshot width="1548" height="848" type="default">
 			<image>https://gitlab.freedesktop.org/bustle/bustle/raw/master/data/appdata/bustle-diagram.png</image>
