@@ -1,9 +1,18 @@
-resolver: lts-12.20
+resolver: lts-14.22
 packages:
 - .
+flags:
+  bustle:
+    # https://gitlab.freedesktop.org/bustle/bustle/issues/13
+    hgettext: false
 allow-newer: true
 extra-deps:
-- hgettext-0.1.31.0
-- pcap-0.4.5.2
+- cairo-0.13.8.0@sha256:9b64a376ebaa4f153bba5866a32291fd4bed48147009cce9158ce6533928eba8,4075
+- gio-0.13.8.0@sha256:5691212b07dc4193ea6f8202a625c9515d750b249aeafc659139e29a5ec61436,3116
+- glib-0.13.8.0@sha256:97698bd054bad38756f3ef0220d7684f72e42660d261e9b118aa73419ce9207d,3136
+- gtk3-0.15.4@sha256:e8de08763cb757c4be202a4eb7551a108b49cd59aa90bc7e2d680893d5fccec1,19491
+- pango-0.13.8.0@sha256:690149ea2efb03c783937b69a5ec6ac854806146fd760e28e800634a6c2243c1,3897
+- pcap-0.4.5.2@sha256:9f9f64abf126b9bbbe2698dd2ec31d25b445d70aab6c845aadd75ae79b6cc0b3,1313
+- gtk2hs-buildtools-0.13.8.0@sha256:132f38155fc677430a47ea750918973161c876fb6f281d342ac2f07eb99229ce,5238
 nix:
   packages: [libpcap, pkgconfig, libxml2, glib, cairo, pango, gnome3.gtk]
