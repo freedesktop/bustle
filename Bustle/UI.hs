@@ -433,41 +433,6 @@ showSaveDialog wi savedCb = do
                             \\"%s\".") tempFilePath
                 displayError wi title (Just secondary)
 
--- | Show a confirmation dialog if the log is unsaved. Suitable for use as a
---   'delete-event' handler.
-promptToSave :: MonadIO io
-             => WindowInfo
-             -> io Bool -- ^ True if we showed a prompt; False if we're
-                        --   happy to quit
-promptToSave wi = io $ do
-    mdetails <- readIORef (wiLogDetails wi)
-    case mdetails of
-        Just (RecordedLog tempFilePath) -> do
-            let tempFileName = takeFileName tempFilePath
-                title = printf (__ "Save log '%s' before closing?") tempFileName :: String
-            prompt <- messageDialogNew (Just (wiWindow wi))
-                                       [DialogModal]
-                                       MessageWarning
-                                       ButtonsNone
-                                       title
-            messageDialogSetSecondaryText prompt
-                (__ "If you don't save, this log will be lost forever.")
-            dialogAddButton prompt (__ "Close _Without Saving") ResponseClose
-            dialogAddButton prompt stockCancel ResponseCancel
-            dialogAddButton prompt stockSave ResponseYes
-
-            widgetShowAll prompt
-            prompt `after` response $ \resp -> do
-                let closeUp = widgetDestroy (wiWindow wi)
-                case resp of
-                    ResponseYes -> showSaveDialog wi closeUp
-                    ResponseClose -> closeUp
-                    _ -> return ()
-                widgetDestroy prompt
-
-            return True
-        _ -> return False
-
 maybeQuit :: B ()
 maybeQuit = do
   n <- decWindows
@@ -576,7 +541,6 @@ emptyWindow = do
                               , wiLogDetails = logDetailsRef
                               }
 
-  io $ window `on` deleteEvent $ promptToSave windowInfo
   incWindows
   io $ widgetShow window
   return windowInfo
