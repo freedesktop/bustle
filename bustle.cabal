@@ -44,12 +44,8 @@ Extra-source-files:
                   , data/org.freedesktop.Bustle.desktop.in
 
                   -- icons
-                  , data/icons/hicolor/16x16/apps/org.freedesktop.Bustle.png
-                  , data/icons/hicolor/22x22/apps/org.freedesktop.Bustle.png
-                  , data/icons/hicolor/32x32/apps/org.freedesktop.Bustle.png
-                  , data/icons/hicolor/48x48/apps/org.freedesktop.Bustle.png
-                  , data/icons/hicolor/256x256/apps/org.freedesktop.Bustle.png
                   , data/icons/hicolor/scalable/apps/org.freedesktop.Bustle.svg
+                  , data/icons/hicolor/scalable/apps/org.freedesktop.Bustle.Devel.svg
                   , data/icons/hicolor/scalable/apps/org.freedesktop.Bustle-symbolic.svg
 
 x-gettext-po-files:     po/*.po
