@@ -16,16 +16,13 @@ BINARIES = \
 MANPAGE = bustle-pcap.1
 DESKTOP_FILE = org.freedesktop.Bustle.desktop
 APPDATA_FILE = org.freedesktop.Bustle.appdata.xml
-ICON_SIZES = 16x16 22x22 32x32 48x48 256x256
 SCALABLE_ICONS = \
 	data/icons/hicolor/scalable/apps/org.freedesktop.Bustle.svg \
+	data/icons/hicolor/scalable/apps/org.freedesktop.Bustle.Devel.svg \
 	data/icons/hicolor/scalable/apps/org.freedesktop.Bustle-symbolic.svg \
 	$(NULL)
-ICONS = \
-	$(SCALABLE_ICONS) \
-	$(foreach size,$(ICON_SIZES),data/icons/hicolor/$(size)/apps/org.freedesktop.Bustle.png) \
 
-all: $(BINARIES) $(MANPAGE) $(DESKTOP_FILE) $(APPDATA_FILE) $(ICONS)
+all: $(BINARIES) $(MANPAGE) $(DESKTOP_FILE) $(APPDATA_FILE) $(SCALABLE_ICONS)
 
 BUSTLE_PCAP_SOURCES = c-sources/pcap-monitor.c c-sources/bustle-pcap.c
 BUSTLE_PCAP_GENERATED_HEADERS = dist/build/autogen/version.h
@@ -71,8 +68,6 @@ install: all
 	cp $(DESKTOP_FILE) $(DATADIR)/applications
 	mkdir -p $(DATADIR)/appdata
 	cp $(APPDATA_FILE) $(DATADIR)/appdata
-	$(foreach size,$(ICON_SIZES),mkdir -p $(DATADIR)/icons/hicolor/$(size)/apps; )
-	$(foreach size,$(ICON_SIZES),cp data/icons/hicolor/$(size)/apps/org.freedesktop.Bustle.png $(DATADIR)/icons/hicolor/$(size)/apps; )
 	mkdir -p $(DATADIR)/icons/hicolor/scalable/apps
 	cp $(SCALABLE_ICONS) $(DATADIR)/icons/hicolor/scalable/apps
 	$(MAKE) update-icon-cache
@@ -82,7 +77,8 @@ uninstall:
 	rm -f $(MAN1DIR)/$(MANPAGE)
 	rm -f $(DATADIR)/applications/$(DESKTOP_FILE)
 	rm -f $(DATADIR)/appdata/$(APPDATA_FILE)
-	$(foreach size,$(ICON_SIZES),rm -f $(DATADIR)/icons/hicolor/$(size)/apps/org.freedesktop.Bustle.png)
+	rm -f $(DATADIR)/icons/hicolor/scalable/apps/org.freedesktop.Bustle.svg
+	rm -f $(DATADIR)/icons/hicolor/scalable/apps/org.freedesktop.Bustle.Devel.svg
 	rm -f $(DATADIR)/icons/hicolor/scalable/apps/org.freedesktop.Bustle-symbolic.svg
 	$(MAKE) update-icon-cache
 

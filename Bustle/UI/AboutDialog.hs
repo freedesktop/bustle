@@ -48,6 +48,7 @@ showAboutDialog window = do
                  , aboutDialogComments := __ "Someone's favourite D-Bus profiler"
                  , aboutDialogWebsite := "https://gitlab.freedesktop.org/bustle/bustle#readme"
                  , aboutDialogAuthors := authors
+                 , aboutDialogArtists := artists
                  , aboutDialogCopyright := "© 2008–2017 Will Thompson, Collabora Ltd. and contributors"
                  , aboutDialogLicense := license
                  , aboutDialogLogoIconName := Just "org.freedesktop.Bustle"
@@ -70,4 +71,8 @@ authors = [ "Will Thompson <will@willthompson.co.uk>"
           , "Philip Withnall"
           , "Jonny Lamb"
           , "Daniel Firth"
+          ]
+
+artists :: [String]
+artists = [ "Tobias Bernard"
           ]
